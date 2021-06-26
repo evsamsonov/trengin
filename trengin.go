@@ -13,6 +13,7 @@ var (
 	ErrSendResultTimeout = errors.New("send result timeout")
 	ErrUnknownAction     = errors.New("unknown action")
 	ErrAlreadyClosed     = errors.New("already closed")
+	ErrActionNotValid    = errors.New("action not valid")
 )
 
 type (
@@ -49,8 +50,10 @@ type Position struct {
 
 var positionIDCounter int64
 
-func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float64) *Position {
-	// todo валидация нужна
+func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float64) (*Position, error) {
+	if !action.IsValid() {
+		return nil, ErrActionNotValid
+	}
 	var stopLoss, takeProfit float64
 	if action.StopLossIndent != 0 {
 		stopLoss = openPrice - action.StopLossIndent*action.Type.Multiplier()
@@ -69,7 +72,7 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 		extra:      make(map[interface{}]interface{}),
 		closed:     make(chan struct{}),
 		closedOnce: &sync.Once{},
-	}
+	}, nil
 }
 
 func (p *Position) Close(closeTime time.Time, closePrice float64) (err error) {
@@ -125,6 +128,10 @@ type OpenPositionAction struct {
 	StopLossIndent   float64
 	TakeProfitIndent float64
 	result           chan OpenPositionActionResult
+}
+
+func (a *OpenPositionAction) IsValid() bool {
+	return a.Type == LongPosition || a.Type == ShortPosition
 }
 
 type OpenPositionActionResult struct {
@@ -194,6 +201,8 @@ func NewChangeConditionalOrderAction(positionID PositionID, stopLoss, takeProfit
 
 type Actions <-chan interface{}
 
+//go:generate docker run -v ${PWD}:/app -w /app/ vektra/mockery --name Strategy --inpackage --case snake
+
 type Strategy interface {
 	Run(ctx context.Context)
 	Actions() Actions
@@ -201,6 +210,8 @@ type Strategy interface {
 }
 
 type PositionClosed <-chan Position
+
+//go:generate docker run -v ${PWD}:/app -w /app/ vektra/mockery --name Broker --inpackage --case snake
 
 type Broker interface {
 	OpenPosition(ctx context.Context, action OpenPositionAction) (Position, PositionClosed, error)
