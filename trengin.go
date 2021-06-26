@@ -226,6 +226,7 @@ type Engine struct {
 	onPositionClosed          func(position Position)
 	onConditionalOrderChanged func(position Position)
 	sendResultTimeout         time.Duration
+	waitGroup                 sync.WaitGroup
 }
 
 func New(strategy Strategy, broker Broker) *Engine {
@@ -237,23 +238,22 @@ func New(strategy Strategy, broker Broker) *Engine {
 }
 
 func (e *Engine) Run(ctx context.Context) (err error) {
-	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(ctx)
 
-	wg.Add(2)
+	e.waitGroup.Add(2)
 	go func() {
-		defer wg.Done()
+		defer e.waitGroup.Done()
 		defer cancel()
 		e.strategy.Run(ctx)
 	}()
 
 	go func() {
-		defer wg.Done()
+		defer e.waitGroup.Done()
 		defer cancel()
 		err = e.run(ctx)
 	}()
 
-	wg.Wait()
+	e.waitGroup.Wait()
 	return
 }
 
@@ -306,7 +306,7 @@ func (e *Engine) OnPositionClosed(f func(position Position)) *Engine {
 
 func (e *Engine) doOpenPosition(ctx context.Context, action OpenPositionAction) error {
 	position, closed, err := e.broker.OpenPosition(ctx, action)
-	closed1, closed2 := teePositionClosed(ctx.Done(), closed)
+	closed1, closed2 := e.teePositionClosed(ctx.Done(), closed)
 	select {
 	case <-ctx.Done():
 		return nil
@@ -319,7 +319,9 @@ func (e *Engine) doOpenPosition(ctx context.Context, action OpenPositionAction) 
 	}:
 	}
 
+	e.waitGroup.Add(1)
 	go func() {
+		defer e.waitGroup.Done()
 		select {
 		case <-ctx.Done():
 			return
@@ -376,10 +378,13 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 	return nil
 }
 
-func teePositionClosed(done <-chan struct{}, in PositionClosed) (PositionClosed, PositionClosed) {
+func (e *Engine) teePositionClosed(done <-chan struct{}, in PositionClosed) (PositionClosed, PositionClosed) {
 	out1 := make(chan Position)
 	out2 := make(chan Position)
+
+	e.waitGroup.Add(1)
 	go func() {
+		defer e.waitGroup.Done()
 		defer close(out1)
 		defer close(out2)
 		for {

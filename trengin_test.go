@@ -254,9 +254,10 @@ func TestEngine_doOpenPosition(t *testing.T) {
 			onPositionClosedCalled = true
 		},
 		sendResultTimeout: 5 * time.Second,
+		waitGroup:         sync.WaitGroup{},
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	resultChan := make(chan OpenPositionActionResult, 1)
 	action := OpenPositionAction{result: resultChan}
 	broker.On("OpenPosition", ctx, action).Return(position, PositionClosed(positionClosed), nil)
@@ -268,6 +269,9 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	assert.Nil(t, result.Error)
 
 	positionClosed <- closedPosition
+	cancel()
+	engine.waitGroup.Wait()
+
 	assert.True(t, onPositionOpenedCalled)
 	assert.True(t, onPositionClosedCalled)
 }
