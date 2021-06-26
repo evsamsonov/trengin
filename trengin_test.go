@@ -3,6 +3,7 @@ package trengin
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -241,7 +242,8 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	closedPosition := Position{}
 	positionClosed := make(chan Position)
 
-	var onPositionOpenedCalled, onPositionClosedCalled bool
+	var onPositionOpenedCalled bool
+	var onPositionClosedCalled int64
 	engine := Engine{
 		strategy: strategy,
 		broker:   broker,
@@ -251,7 +253,7 @@ func TestEngine_doOpenPosition(t *testing.T) {
 		},
 		onPositionClosed: func(p Position) {
 			assert.Equal(t, position, p)
-			onPositionClosedCalled = true
+			atomic.AddInt64(&onPositionClosedCalled, 1)
 		},
 		sendResultTimeout: 5 * time.Second,
 		waitGroup:         sync.WaitGroup{},
@@ -269,11 +271,23 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	assert.Nil(t, result.Error)
 
 	positionClosed <- closedPosition
+	assert.True(t, onPositionOpenedCalled)
+
+	timeout := time.After(1 * time.Millisecond)
+stop:
+	for {
+		select {
+		case <-timeout:
+			assert.Fail(t, "onPositionClosed not called")
+			break stop
+		default:
+			if atomic.LoadInt64(&onPositionClosedCalled) == 1 {
+				break stop
+			}
+		}
+	}
 	cancel()
 	engine.waitGroup.Wait()
-
-	assert.True(t, onPositionOpenedCalled)
-	assert.True(t, onPositionClosedCalled)
 }
 
 func TestEngine_doClosePosition(t *testing.T) {
@@ -286,7 +300,7 @@ func TestEngine_doClosePosition(t *testing.T) {
 		sendResultTimeout: 5 * time.Second,
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	resultChan := make(chan ClosePositionActionResult, 1)
 	action := ClosePositionAction{result: resultChan}
 	broker.On("ClosePosition", ctx, action).Return(position, nil)
@@ -296,6 +310,9 @@ func TestEngine_doClosePosition(t *testing.T) {
 	result := <-resultChan
 	assert.Equal(t, position, result.Position)
 	assert.Nil(t, result.Error)
+
+	cancel()
+	engine.waitGroup.Wait()
 }
 
 func TestEngine_doChangeConditionalOrder(t *testing.T) {
@@ -314,7 +331,7 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	resultChan := make(chan ChangeConditionalOrderActionResult, 1)
 	action := ChangeConditionalOrderAction{result: resultChan}
 	broker.On("ChangeConditionalOrder", ctx, action).Return(position, nil)
@@ -325,4 +342,7 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 	assert.Equal(t, position, result.Position)
 	assert.Nil(t, result.Error)
 	assert.True(t, onChangeConditionalOrderCalled)
+
+	cancel()
+	engine.waitGroup.Wait()
 }
