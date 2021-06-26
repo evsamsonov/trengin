@@ -144,7 +144,6 @@ func TestPosition_Close(t *testing.T) {
 		assert.Equal(t, 12., position.ClosePrice)
 		assert.Equal(t, closeTime, position.CloseTime)
 	})
-
 }
 
 func TestPosition_IsLong(t *testing.T) {
@@ -230,7 +229,7 @@ func TestOpenPositionAction_IsValid(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		action := OpenPositionAction{Type: 0}
+		action := OpenPositionAction{Type: LongPosition}
 		assert.True(t, action.IsValid())
 	})
 }
