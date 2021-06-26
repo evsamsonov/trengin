@@ -1,6 +1,5 @@
 # trading-engine
 Trading Engine
 
-![golangci-lint](https://github.com/evsamsonov/trengin/actions/workflows/lint.yml/badge.svg)
-
-![test](https://github.com/evsamsonov/trengin/actions/workflows/test.yml/badge.svg)
+[![Lint Status](https://github.com/evsamsonov/trengin/actions/workflows/lint.yml/badge.svg)](https://github.com/evsamsonov/trengin/actions?workflow=golangci-lint)
+[![Test Status](https://github.com/evsamsonov/trengin/actions/workflows/test.yml/badge.svg)](https://github.com/evsamsonov/trengin/actions?workflow=test) 
