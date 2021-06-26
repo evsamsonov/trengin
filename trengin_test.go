@@ -273,16 +273,16 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	positionClosed <- closedPosition
 	assert.True(t, onPositionOpenedCalled)
 
-	timeout := time.After(1 * time.Millisecond)
-stop:
+	timeout := time.After(100 * time.Millisecond)
+waitCalledLoop:
 	for {
 		select {
 		case <-timeout:
 			assert.Fail(t, "onPositionClosed not called")
-			break stop
+			break waitCalledLoop
 		default:
 			if atomic.LoadInt64(&onPositionClosedCalled) == 1 {
-				break stop
+				break waitCalledLoop
 			}
 		}
 	}
