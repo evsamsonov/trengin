@@ -233,7 +233,7 @@ func New(strategy Strategy, broker Broker) *Engine {
 	return &Engine{
 		strategy:          strategy,
 		broker:            broker,
-		sendResultTimeout: 1 * time.Millisecond,
+		sendResultTimeout: 1 * time.Second,
 	}
 }
 
