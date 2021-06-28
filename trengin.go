@@ -22,12 +22,12 @@ type (
 )
 
 const (
-	LongPosition PositionType = iota + 1
-	ShortPosition
+	Long PositionType = iota + 1
+	Short
 )
 
 func (t PositionType) Multiplier() float64 {
-	if t == LongPosition {
+	if t == Long {
 		return 1
 	}
 	return -1
@@ -91,11 +91,11 @@ func (p Position) Closed() <-chan struct{} {
 }
 
 func (p Position) IsLong() bool {
-	return p.Type == LongPosition
+	return p.Type == Long
 }
 
 func (p Position) IsShort() bool {
-	return p.Type == ShortPosition
+	return p.Type == Short
 }
 
 func (p Position) Profit() float64 {
@@ -131,7 +131,7 @@ type OpenPositionAction struct {
 }
 
 func (a *OpenPositionAction) IsValid() bool {
-	return a.Type == LongPosition || a.Type == ShortPosition
+	return a.Type == Long || a.Type == Short
 }
 
 type OpenPositionActionResult struct {

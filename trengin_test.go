@@ -18,12 +18,12 @@ func TestPositionType_Multiplier(t *testing.T) {
 	}{
 		{
 			name:         "long",
-			positionType: LongPosition,
+			positionType: Long,
 			want:         1,
 		},
 		{
 			name:         "short",
-			positionType: ShortPosition,
+			positionType: Short,
 			want:         -1,
 		},
 	}
@@ -54,7 +54,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 		{
 			name: "long",
 			action: OpenPositionAction{
-				Type:             LongPosition,
+				Type:             Long,
 				StopLossIndent:   1,
 				TakeProfitIndent: 2,
 				result:           make(chan OpenPositionActionResult),
@@ -63,7 +63,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			openTime:  time.Unix(1, 0),
 			want: &Position{
 				ID:         1,
-				Type:       LongPosition,
+				Type:       Long,
 				OpenTime:   time.Unix(1, 0),
 				OpenPrice:  10,
 				CloseTime:  time.Time{},
@@ -75,7 +75,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 		{
 			name: "short",
 			action: OpenPositionAction{
-				Type:             ShortPosition,
+				Type:             Short,
 				StopLossIndent:   1,
 				TakeProfitIndent: 2,
 				result:           make(chan OpenPositionActionResult),
@@ -84,7 +84,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			openTime:  time.Unix(1, 0),
 			want: &Position{
 				ID:         1,
-				Type:       ShortPosition,
+				Type:       Short,
 				OpenTime:   time.Unix(1, 0),
 				OpenPrice:  10,
 				CloseTime:  time.Time{},
@@ -148,12 +148,12 @@ func TestPosition_Close(t *testing.T) {
 }
 
 func TestPosition_IsLong(t *testing.T) {
-	position := Position{Type: LongPosition}
+	position := Position{Type: Long}
 	assert.True(t, position.IsLong())
 }
 
 func TestPosition_IsShort(t *testing.T) {
-	position := Position{Type: ShortPosition}
+	position := Position{Type: Short}
 	assert.True(t, position.IsShort())
 }
 
@@ -165,12 +165,12 @@ func TestPosition_Profit(t *testing.T) {
 	}{
 		{
 			name:     "long",
-			position: Position{Type: LongPosition, OpenPrice: 10, ClosePrice: 15},
+			position: Position{Type: Long, OpenPrice: 10, ClosePrice: 15},
 			want:     5,
 		},
 		{
 			name:     "short",
-			position: Position{Type: ShortPosition, OpenPrice: 10, ClosePrice: 15},
+			position: Position{Type: Short, OpenPrice: 10, ClosePrice: 15},
 			want:     -5,
 		},
 	}
@@ -190,13 +190,13 @@ func TestPosition_ProfitByPrice(t *testing.T) {
 	}{
 		{
 			name:     "long",
-			position: Position{Type: LongPosition, OpenPrice: 10},
+			position: Position{Type: Long, OpenPrice: 10},
 			price:    25,
 			want:     15,
 		},
 		{
 			name:     "short",
-			position: Position{Type: ShortPosition, OpenPrice: 10},
+			position: Position{Type: Short, OpenPrice: 10},
 			price:    5,
 			want:     5,
 		},
@@ -230,7 +230,7 @@ func TestOpenPositionAction_IsValid(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		action := OpenPositionAction{Type: LongPosition}
+		action := OpenPositionAction{Type: Long}
 		assert.True(t, action.IsValid())
 	})
 }
