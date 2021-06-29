@@ -3,7 +3,7 @@
 [![Lint Status](https://github.com/evsamsonov/trengin/actions/workflows/lint.yml/badge.svg)](https://github.com/evsamsonov/trengin/actions?workflow=golangci-lint)
 [![Test Status](https://github.com/evsamsonov/trengin/actions/workflows/test.yml/badge.svg)](https://github.com/evsamsonov/trengin/actions?workflow=test)
 
-Торговое ядро для создания автоматизированного торгового робота. Связывает торговую стратегию и клиента, реализующего исполнение торговых операций. Позволяет гибко описать торговую стратегию.
+Основа для создания автоматизированного торгового робота. Связывает торговую стратегию и клиента, реализующего исполнение торговых операций. Позволяет гибко реализовать торговую стратегию.
 
 ## Установка
 
