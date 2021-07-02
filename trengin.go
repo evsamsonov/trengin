@@ -1,16 +1,17 @@
-// Package trengin предоставляет основу для создания автоматизированного
-// торгового робота. Определяет интерфейс Strategy и Broker, позволяя связать
+// Package trengin предоставляет каркас для создания торгового робота.
+// Определяет интерфейс Strategy и Broker, позволяя связать
 // реализации этих интерфейсов через экземпляр Engine.
 //
-// Реализация Strategy может гибко выполнять действия по открытию новой
-// позиции (OpenPositionAction), измении условной заявки (стоп-лосс и тейк-профит)
-// у открытой позиции (ChangeConditionalOrderAction) и закрытию позиции (ClosePositionAction).
+// Strategy имеет возможность гибко выполнять действия по открытию новой
+// позиции (OpenPositionAction), изменении условной заявки позиции (стоп-лосс и тейк-профит)
+// (ChangeConditionalOrderAction) и закрытию позиции (ClosePositionAction).
 //
 // Broker должен реализовывать функционал открытия сделки, отслеживания статуса условной заявки,
 // изменения условной заявки и закрытия позиции.
 //
-// Для реализации дополнительного функционала можно устанавливать коллбеки c помощью методов
-// OnPositionOpened, OnPositionClosed, OnConditionalOrderChanged
+// Для выполнения дополнительного функционала можно устанавливать коллбеки
+// на события изменения позиции c помощью методов OnPositionOpened, OnPositionClosed
+// и OnConditionalOrderChanged
 package trengin
 
 import (
@@ -56,23 +57,25 @@ func (t PositionType) Multiplier() float64 {
 
 //go:generate docker run -v ${PWD}:/app -w /app/ vektra/mockery --name Strategy --inpackage --case snake
 
-// Strategy описывает интерфейс торговой стратегии. Позволяет реализовать стратегию
+// Strategy описывает интерфейс торговой стратегии. Позволяет реализовать стратегию,
 // взаимодействуя с Engine через каналы, которые возвращают методы Actions и Errors.
-// Actions позволяет отправлять торговые действия, Errors оповестить о критической ошибке.
-// Есть закрыть любой из каналов или отправить значение в канал ошибок, то
-// Engine завершит свою работу
+// Actions используется для отправки торговых действий, Errors для оповещения
+// о критической ошибке. Есть закрыть любой из каналов или отправить значение
+// в канал ошибок, то Engine завершит свою работу
 type Strategy interface {
-	// Run запускает стратегию
+	// Run запускает стратегию в работу
 	Run(ctx context.Context)
 
-	// Actions возвращает канал для получения торговых действий
+	// Actions возвращает канал для получения торговых действий. При закрытии
+	// канала Engine завершит работу.
 	Actions() Actions
 
-	// Errors возвращает канал для получения ошибок
+	// Errors возвращает канал для получения ошибок. При получении сообщения
+	// из канала или на его закрытие Engine завершит работу.
 	Errors() <-chan error
 }
 
-// Actions это канал для передачи действий от Strategy к Broker через Engine
+// Actions канал для передачи торговых действий от Strategy к Broker
 // Может принимать типы OpenPositionAction, ClosePositionAction, ChangeConditionalOrderAction.
 // Неожиданные типы приведут к ошибке и завершению работы Engine
 type Actions <-chan interface{}
@@ -87,10 +90,10 @@ type Broker interface {
 	// позиция при закрытии.
 	OpenPosition(ctx context.Context, action OpenPositionAction) (Position, PositionClosed, error)
 
-	// ClosePosition закрывает позицию. Возвращает позиция
+	// ClosePosition закрывает позицию. Возвращает закрытую позицию
 	ClosePosition(ctx context.Context, action ClosePositionAction) (Position, error)
 
-	// ChangeConditionalOrder изменяет условную заявку по позиции. Возвращает позиция
+	// ChangeConditionalOrder изменяет условную заявку по позиции. Возвращает измененую позицию
 	ChangeConditionalOrder(ctx context.Context, action ChangeConditionalOrderAction) (Position, error)
 }
 
@@ -114,8 +117,8 @@ type Position struct {
 
 var positionIDCounter int64
 
-// NewPosition создает новую позицию по action, с временем открытия openTime и с ценой открытия openPrice.
-// Если action невалиден, то вернет ErrActionNotValid
+// NewPosition создает новую позицию по данным в action, с временем открытия openTime
+// и с ценой открытия openPrice. Если action невалиден, то вернет ErrActionNotValid.
 func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float64) (*Position, error) {
 	if !action.IsValid() {
 		return nil, ErrActionNotValid
@@ -143,7 +146,7 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 
 // Close закрывает позицию с временем закрытия closeTime и ценой закрытия closePrice.
 // При повторном вызове вернет ошибку ErrAlreadyClosed, время и цена закрытия
-// в этом случае не изменится
+// в этом случае не изменится.
 func (p *Position) Close(closeTime time.Time, closePrice float64) (err error) {
 	err = ErrAlreadyClosed
 	p.closedOnce.Do(func() {
@@ -168,7 +171,8 @@ func (p Position) IsShort() bool {
 	return p.Type == Short
 }
 
-// Profit возвращает прибыль по закрытой сделке. Если сделка не закрыта, то вернет 0 todo
+// Profit возвращает прибыль по закрытой сделке. Для получения незафиксированной прибыли
+// по открытой позиции следует использовать метод ProfitByPrice
 func (p Position) Profit() float64 {
 	return p.ProfitByPrice(p.ClosePrice)
 }
@@ -178,8 +182,7 @@ func (p Position) ProfitByPrice(price float64) float64 {
 	return (price - p.OpenPrice) * p.Type.Multiplier()
 }
 
-// Duration возвращает длительность закрытой сделки. Если сделка не закрыта,
-// то вернет нулевую длительность todo
+// Duration возвращает длительность закрытой сделки
 func (p Position) Duration() time.Duration {
 	return p.CloseTime.Sub(p.OpenTime)
 }
@@ -192,17 +195,19 @@ func (p Position) Extra(key interface{}) interface{} {
 	return p.extra[key]
 }
 
-// AddExtra добавляет или перезаписывает значение дополнительного
-// поля с ключом key. Может использоваться для хранения дополнительных
-// необязательных информационных данных при реализации стратегии или брокера
-func (p *Position) AddExtra(key interface{}, val interface{}) *Position {
+// SetExtra устанавливает значение дополнительного поля с ключом key.
+// Может использоваться для хранения дополнительных необязательных информационных
+// данных при реализации стратегии или брокера. Не рекомендуется завязываться
+// на эти данные при реализации Strategy или Broker
+func (p *Position) SetExtra(key interface{}, val interface{}) *Position {
 	p.extraMtx.Lock()
 	defer p.extraMtx.Unlock()
 	p.extra[key] = val
 	return p
 }
 
-// OpenPositionAction описывает действие по открытию позиции
+// OpenPositionAction описывает действие по открытию позиции с типом Type и отступами
+// условной заявки StopLossIndent и TakeProfitIndent
 type OpenPositionAction struct {
 	Type PositionType
 
@@ -211,23 +216,25 @@ type OpenPositionAction struct {
 
 	// Отступ тейк-профита от цены открытия. Если равен 0, то тейк-профит не должен использоваться
 	TakeProfitIndent float64
-	result           chan OpenPositionActionResult
+
+	result chan OpenPositionActionResult
 }
 
 func (a *OpenPositionAction) IsValid() bool {
 	return a.Type == Long || a.Type == Short
 }
 
+// OpenPositionActionResult результат открытия позиции
 type OpenPositionActionResult struct {
 	Position Position
-	Closed   PositionClosed
+	Closed   PositionClosed // Канал, для отслеживания закрытия сделки
 	Error    error
 }
 
 // NewOpenPositionAction создает действие на открытие позиции с типом positionType,
 // отступом стоп-лосса от цены открытия stopLossIndent и отступом тейк-профита
 // от цены открытия takeProfitIndent. Если стоп-лосс или тейк-профит не требуются,
-// то соответствующие значения отступов должны быть равны 0
+// то соответствующие значения отступов должны быть равны 0.
 func NewOpenPositionAction(positionType PositionType, stopLossIndent, takeProfitIndent float64) OpenPositionAction {
 	return OpenPositionAction{
 		Type:             positionType,
@@ -237,18 +244,18 @@ func NewOpenPositionAction(positionType PositionType, stopLossIndent, takeProfit
 	}
 }
 
-// Result возвращает результат выполнения действия на открытия позиции
+// Result возвращает результат выполнения действия на открытия позиции.
 func (a *OpenPositionAction) Result() <-chan OpenPositionActionResult {
 	return a.result
 }
 
-// ClosePositionAction описывает действие по закрытию позиции
+// ClosePositionAction описывает действие по закрытию позиции.
 type ClosePositionAction struct {
 	PositionID PositionID
 	result     chan ClosePositionActionResult
 }
 
-// NewClosePositionAction создает действие на закрытие позиции с идентификатором positionID
+// NewClosePositionAction создает действие на закрытие позиции с идентификатором positionID.
 func NewClosePositionAction(positionID PositionID) ClosePositionAction {
 	return ClosePositionAction{
 		PositionID: positionID,
@@ -256,6 +263,7 @@ func NewClosePositionAction(positionID PositionID) ClosePositionAction {
 	}
 }
 
+// ClosePositionActionResult описывает результат закрытия позиции
 type ClosePositionActionResult struct {
 	Position Position
 	Error    error
@@ -267,9 +275,8 @@ func (a *ClosePositionAction) Result() <-chan ClosePositionActionResult {
 }
 
 // ChangeConditionalOrderAction описывает действие на изменение условной заявки
-// позиции с идентификатором PositionID. При передаче StopLoss равным 0, то StopLoss
-// позиции не должен изменяться. При передаче TakeProfit равным 0, то TakeProfit
-// позиции не должен изменяться.
+// позиции с идентификатором PositionID. При передаче StopLoss или TakeProfit
+// равным 0 данные значения не должны изменяться
 type ChangeConditionalOrderAction struct {
 	PositionID PositionID
 	StopLoss   float64
@@ -282,11 +289,15 @@ func (a *ChangeConditionalOrderAction) Result() <-chan ChangeConditionalOrderAct
 	return a.result
 }
 
+// ChangeConditionalOrderActionResult описывает результат изменения условной заявки
 type ChangeConditionalOrderActionResult struct {
 	Position Position
 	Error    error
 }
 
+// NewChangeConditionalOrderAction создает действие на изменение условной заявки по позиции
+// с указанным positionID, новыми значения stopLoss и takeProfit. Если менять stopLoss или takeProfit
+// не требуется, то нужно передать их равными 0.
 func NewChangeConditionalOrderAction(positionID PositionID, stopLoss, takeProfit float64) ChangeConditionalOrderAction {
 	return ChangeConditionalOrderAction{
 		PositionID: positionID,
@@ -368,11 +379,11 @@ func (e *Engine) run(ctx context.Context) error {
 }
 
 // OnPositionOpened устанавливает коллбек fn на открытие позиции.
-// Актуальная позиция передается параметров в метод fn.
+// Актуальная позиция передается параметром в метод fn.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
 // Функция не потокобезопасна. Не следует вызывать в разных горутинах
-//// и после запуска Engine
+// и после запуска Engine
 func (e *Engine) OnPositionOpened(fn func(position Position)) *Engine {
 	e.onPositionOpened = fn
 	return e
@@ -383,7 +394,7 @@ func (e *Engine) OnPositionOpened(fn func(position Position)) *Engine {
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
 // Функция не потокобезопасна. Не следует вызывать в разных горутинах
-//// и после запуска Engine
+// и после запуска Engine
 func (e *Engine) OnConditionalOrderChanged(fn func(position Position)) *Engine {
 	e.onConditionalOrderChanged = fn
 	return e
@@ -474,6 +485,7 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 	return nil
 }
 
+// teePositionClosed создает 2 канала из переданного канала in
 func (e *Engine) teePositionClosed(done <-chan struct{}, in PositionClosed) (PositionClosed, PositionClosed) {
 	out1 := make(chan Position)
 	out2 := make(chan Position)

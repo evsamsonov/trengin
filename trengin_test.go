@@ -224,7 +224,7 @@ func TestPosition_Extra(t *testing.T) {
 		extra:    make(map[interface{}]interface{}),
 	}
 	assert.Nil(t, position.Extra("test"))
-	position.AddExtra("test", 123)
+	position.SetExtra("test", 123)
 	assert.Equal(t, 123, position.Extra("test"))
 }
 
