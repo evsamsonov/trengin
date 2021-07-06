@@ -485,7 +485,6 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 	return nil
 }
 
-// teePositionClosed создает 2 канала из переданного канала in
 func (e *Engine) teePositionClosed(done <-chan struct{}, in PositionClosed) (PositionClosed, PositionClosed) {
 	out1 := make(chan Position)
 	out2 := make(chan Position)
