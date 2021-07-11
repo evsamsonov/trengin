@@ -382,7 +382,7 @@ func (e *Engine) run(ctx context.Context) error {
 // Актуальная позиция передается параметром в метод fn.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
-// Функция не потокобезопасна. Не следует вызывать в разных горутинах
+// Метод не потокобезопасен. Не следует вызывать в разных горутинах
 // и после запуска Engine
 func (e *Engine) OnPositionOpened(fn func(position Position)) *Engine {
 	e.onPositionOpened = fn
@@ -393,7 +393,7 @@ func (e *Engine) OnPositionOpened(fn func(position Position)) *Engine {
 // по позиции. Актуальная позиция передается параметром в метод fn.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
-// Функция не потокобезопасна. Не следует вызывать в разных горутинах
+// Метод не потокобезопасен. Не следует вызывать в разных горутинах
 // и после запуска Engine
 func (e *Engine) OnConditionalOrderChanged(fn func(position Position)) *Engine {
 	e.onConditionalOrderChanged = fn
@@ -404,7 +404,7 @@ func (e *Engine) OnConditionalOrderChanged(fn func(position Position)) *Engine {
 // Актуальная позиция передается параметром в метод fn.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
-// Функция не потокобезопасна. Не следует вызывать в разных горутинах
+// Метод не потокобезопасен. Не следует вызывать в разных горутинах
 // и после запуска Engine
 func (e *Engine) OnPositionClosed(fn func(position Position)) *Engine {
 	e.onPositionClosed = fn
