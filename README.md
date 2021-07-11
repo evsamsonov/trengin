@@ -3,7 +3,7 @@
 [![Lint Status](https://github.com/evsamsonov/trengin/actions/workflows/lint.yml/badge.svg)](https://github.com/evsamsonov/trengin/actions?workflow=golangci-lint)
 [![Test Status](https://github.com/evsamsonov/trengin/actions/workflows/test.yml/badge.svg)](https://github.com/evsamsonov/trengin/actions?workflow=test)
 
-Движок для создания торгового робота. Связывает стратегию и клиента, реализующего исполнения торговых операций. Позволяет гибко описать стратегию.
+Golang библиотека для создания торгового робота. Связывает торговую стратегию и реализацию исполнения торговых операций. Позволяет гибко описать стратегию.
 
 ## Установка
 
@@ -56,7 +56,7 @@ type Strategy interface {
 
 В канал торговых действий можно отправить экземпляры OpenPositionAction, ClosePositionAction, ChangeConditionalOrderAction. Создать их можно через конструктор. При отправке неожиданных типов торговый движок завершит работу с ошибкой.
 
-**_OpenPositionAction_**
+**OpenPositionAction**
 
 Открытие позиции
 
@@ -70,7 +70,7 @@ type Strategy interface {
 | stopLossIndent | Отступ стоп-лосса от цены открытия позиции |
 | takeProfitIndent | Отступ тейк-профита от цены открытия позиции  |
 
-**_ChangeConditionalOrderAction_**
+**ChangeConditionalOrderAction**
 
 Изменение условной заявки
 
@@ -84,7 +84,7 @@ type Strategy interface {
 | stopLoss | Новое значения для стоп-лосса (если равны 0, то не изменять) |
 | takeProfit | Новое значения для стоп-лосса (если равны 0, то не изменять) |
 
-_**ClosePositionAction**_
+**ClosePositionAction**
 
 Закрытие позиции
 
