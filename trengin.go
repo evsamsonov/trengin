@@ -159,37 +159,37 @@ func (p *Position) Close(closeTime time.Time, closePrice float64) (err error) {
 }
 
 // Closed возвращает канал, который будет закрыт при закрытии позиции
-func (p Position) Closed() <-chan struct{} {
+func (p *Position) Closed() <-chan struct{} {
 	return p.closed
 }
 
-func (p Position) IsLong() bool {
+func (p *Position) IsLong() bool {
 	return p.Type == Long
 }
 
-func (p Position) IsShort() bool {
+func (p *Position) IsShort() bool {
 	return p.Type == Short
 }
 
 // Profit возвращает прибыль по закрытой сделке. Для получения незафиксированной прибыли
 // по открытой позиции следует использовать метод ProfitByPrice
-func (p Position) Profit() float64 {
+func (p *Position) Profit() float64 {
 	return p.ProfitByPrice(p.ClosePrice)
 }
 
 // ProfitByPrice возвращает прибыль позиции при указанной цене price
-func (p Position) ProfitByPrice(price float64) float64 {
+func (p *Position) ProfitByPrice(price float64) float64 {
 	return (price - p.OpenPrice) * p.Type.Multiplier()
 }
 
 // Duration возвращает длительность закрытой сделки
-func (p Position) Duration() time.Duration {
+func (p *Position) Duration() time.Duration {
 	return p.CloseTime.Sub(p.OpenTime)
 }
 
 // Extra получает значение дополнительного поля по ключу key.
 // Если значение не задано, то вернет nil
-func (p Position) Extra(key interface{}) interface{} {
+func (p *Position) Extra(key interface{}) interface{} {
 	p.extraMtx.RLock()
 	defer p.extraMtx.RUnlock()
 	return p.extra[key]
@@ -244,9 +244,14 @@ func NewOpenPositionAction(positionType PositionType, stopLossIndent, takeProfit
 	}
 }
 
-// Result возвращает результат выполнения действия на открытия позиции.
-func (a *OpenPositionAction) Result() <-chan OpenPositionActionResult {
-	return a.result
+// Result возвращает результат выполнения действия на открытие позиции.
+func (a *OpenPositionAction) Result(ctx context.Context) (OpenPositionActionResult, error) {
+	select {
+	case <-ctx.Done():
+		return OpenPositionActionResult{}, ctx.Err()
+	case result := <-a.result:
+		return result, nil
+	}
 }
 
 // ClosePositionAction описывает действие по закрытию позиции.
@@ -270,8 +275,13 @@ type ClosePositionActionResult struct {
 }
 
 // Result возвращает результат выполнения действия на закрытия позиции
-func (a *ClosePositionAction) Result() <-chan ClosePositionActionResult {
-	return a.result
+func (a *ClosePositionAction) Result(ctx context.Context) (ClosePositionActionResult, error) {
+	select {
+	case <-ctx.Done():
+		return ClosePositionActionResult{}, ctx.Err()
+	case result := <-a.result:
+		return result, nil
+	}
 }
 
 // ChangeConditionalOrderAction описывает действие на изменение условной заявки
@@ -285,8 +295,13 @@ type ChangeConditionalOrderAction struct {
 }
 
 // Result возвращает канал, который вернет результат выполнения действия на изменения условной заявки
-func (a *ChangeConditionalOrderAction) Result() <-chan ChangeConditionalOrderActionResult {
-	return a.result
+func (a *ChangeConditionalOrderAction) Result(ctx context.Context) (ChangeConditionalOrderActionResult, error) {
+	select {
+	case <-ctx.Done():
+		return ChangeConditionalOrderActionResult{}, ctx.Err()
+	case result := <-a.result:
+		return result, nil
+	}
 }
 
 // ChangeConditionalOrderActionResult описывает результат изменения условной заявки
@@ -329,7 +344,6 @@ func New(strategy Strategy, broker Broker) *Engine {
 // Run запускает стратегию в работу
 func (e *Engine) Run(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
-
 	e.waitGroup.Add(2)
 	go func() {
 		defer e.waitGroup.Done()
