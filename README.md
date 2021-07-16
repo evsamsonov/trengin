@@ -94,9 +94,27 @@ type Strategy interface {
 Пример отправки действия и получения результата
 
 ```go
-action := trengin.NewOpenPositionAction(positionType, stopLossIndent, takeProfitIndent)
-s.actions <- action
-openPositionResult := <-act.Result()
+sendActionOrDone := func(ctx context.Context, action interface{}) error {
+    select {
+    case <-ctx.Done():
+    	return ctx.Err()
+    case s.actions <- action:
+    }
+    return nil
+}
+
+var stopLossIndent, takeProfitIndent float64
+action := trengin.NewOpenPositionAction(trengin.Long, stopLossIndent, takeProfitIndent)
+if err = s.sendActionOrDone(ctx, action); err != nil {
+    // Обработка ошибки
+}
+result, err := action.Result(ctx)
+if err != nil {
+    // Обработка ошибки
+}
+if result.Error != nil {
+    // Обработка ошибки
+}
 ```
 
 ## Как реализовать модуль для отправки торговых операций
@@ -116,6 +134,27 @@ type Broker interface {
 Метод `ClosePosition` должен закрывать позицию по данным `action`. Возвращать экземпляр закрытой позиции. 
 
 Метод `ChangeConditionalOrder` должен изменить условную заявку по данным `action`. Возвращать актуальный экземпляр позиции.
+
+## Описание сущности Position
+
+Структура Position описывает торговую позицию. Содержит уникальный идентификатор в рамках одного запуска, основные данные о позиции и дополнительные данные о позиции. Может быть в двух состояниях — открытом и закрытом. Некоторые методы возвращают корректное значение только при закрытой позиции. 
+
+Дополнительные данные следует использовать только в информационных целях, не завязывая на них логику работы стратегии и модуля исполнения торговых операций.
+
+Создается через конструктор `NewPosition` по действию `action` с временем открытия `openTime` и ценой открытия `openPrice`. Позиция должна создаваться и закрываться в реализации `Broker`. В реализацию `Strategy` передается копия позиции с возможностью установить дополнительные данные.   
+
+|  Название  | Описание | 
+| ------------- | ------------- | 
+| `Close` | Метод для закрытия позиции. Принимает время закрытия `closeTime` и цену закрытия `closePrice`. Если позиция уже закрыта, вернет ошибку `ErrAlreadyClosed` |
+| `Closed` | Возвращает канал, который будет закрыт при закрытии позиции |
+| `IsLong` | Тип сделки покупка |
+| `IsShort` | Тип сделки продажа |
+| `Profit` | Прибыль по закрытой сделке |
+| `ProfitByPrice` | Прибыль по переданной цене `price` |
+| `Duration` | Длительность закрытой сделки |
+| `Extra` | Вернет дополнительные данные по ключу `key`, либо `nil`, если данные не найдены |
+| `SetExtra` | Устанавливает значение `val` для ключа `key` |
+| `RangeExtra` | Выполняет переданную функцию для каждого значения в списке Extra |
 
 
 ## Дополнительные действия на события

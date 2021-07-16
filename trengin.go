@@ -100,8 +100,11 @@ type Broker interface {
 // PositionClosed канал, в который отправляется позиция при закрытии
 type PositionClosed <-chan Position
 
+// Position описывает торговую позицию. Идентификатор ID является уникальным
+// только в рамках одного запуска и требуется для идентификации позиции
+// реализацией Broker при закрытии сделки и изменении стоп-лосса
 type Position struct {
-	ID         PositionID // Уникальный идентификатор в рамках запуска
+	ID         PositionID
 	Type       PositionType
 	OpenTime   time.Time
 	OpenPrice  float64
@@ -197,13 +200,22 @@ func (p *Position) Extra(key interface{}) interface{} {
 
 // SetExtra устанавливает значение дополнительного поля с ключом key.
 // Может использоваться для хранения дополнительных необязательных информационных
-// данных при реализации стратегии или брокера. Не рекомендуется завязываться
-// на эти данные при реализации Strategy или Broker
+// данных при реализации стратегии или брокера. Не следует завязываться
+// на эти данные при реализации логики работы Strategy или Broker
 func (p *Position) SetExtra(key interface{}, val interface{}) *Position {
 	p.extraMtx.Lock()
 	defer p.extraMtx.Unlock()
 	p.extra[key] = val
 	return p
+}
+
+// todo нужен тест
+func (p *Position) RangeExtra(f func(key interface{}, value interface{})) {
+	p.extraMtx.RLock()
+	defer p.extraMtx.RUnlock()
+	for k, v := range p.extra {
+		f(k, v)
+	}
 }
 
 // OpenPositionAction описывает действие по открытию позиции с типом Type и отступами
@@ -274,6 +286,7 @@ type ClosePositionActionResult struct {
 	Error    error
 }
 
+// todo подумать на счет ошибки, нужна ли она в структуре - может быть сделать неэкспортируемой
 // Result возвращает результат выполнения действия на закрытия позиции
 func (a *ClosePositionAction) Result(ctx context.Context) (ClosePositionActionResult, error) {
 	select {
