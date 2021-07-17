@@ -377,7 +377,7 @@ func (e *Engine) run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		case err := <-e.strategy.Errors():
 			return err
 		case action, ok := <-e.strategy.Actions():
