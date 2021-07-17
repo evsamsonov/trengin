@@ -40,7 +40,7 @@ const (
 	Short
 )
 
-// Multiplier возвращает 1 для значения Long, -1 для Short
+// Multiplier возвращает 1 для значения Long, -1 для значения Short
 // и 0 на любое другое значение. Может использоваться как множитель
 // при вычислениях, которые зависят от типа позиции, например,
 // при вычислении прибыли по позиции
@@ -75,7 +75,7 @@ type Strategy interface {
 	Errors() <-chan error
 }
 
-// Actions канал для передачи торговых действий от Strategy к Broker
+// Actions это канал для передачи торговых действий от Strategy к Broker
 // Может принимать типы OpenPositionAction, ClosePositionAction, ChangeConditionalOrderAction.
 // Неожиданные типы приведут к ошибке и завершению работы Engine
 type Actions <-chan interface{}
@@ -93,7 +93,7 @@ type Broker interface {
 	// ClosePosition закрывает позицию. Возвращает закрытую позицию
 	ClosePosition(ctx context.Context, action ClosePositionAction) (Position, error)
 
-	// ChangeConditionalOrder изменяет условную заявку по позиции. Возвращает измененую позицию
+	// ChangeConditionalOrder изменяет условную заявку по позиции. Возвращает измененную позицию
 	ChangeConditionalOrder(ctx context.Context, action ChangeConditionalOrderAction) (Position, error)
 }
 
@@ -101,8 +101,7 @@ type Broker interface {
 type PositionClosed <-chan Position
 
 // Position описывает торговую позицию. Идентификатор ID является уникальным
-// только в рамках одного запуска и требуется для идентификации позиции
-// реализацией Broker при закрытии сделки и изменении стоп-лосса
+// только в рамках одного запуска
 type Position struct {
 	ID         PositionID
 	Type       PositionType
@@ -120,7 +119,7 @@ type Position struct {
 
 var positionIDCounter int64
 
-// NewPosition создает новую позицию по данным в action, с временем открытия openTime
+// NewPosition создает новую позицию по action, с временем открытия openTime
 // и с ценой открытия openPrice. Если action невалиден, то вернет ErrActionNotValid.
 func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float64) (*Position, error) {
 	if !action.IsValid() {
@@ -201,7 +200,8 @@ func (p *Position) Extra(key interface{}) interface{} {
 // SetExtra устанавливает значение дополнительного поля с ключом key.
 // Может использоваться для хранения дополнительных необязательных информационных
 // данных при реализации стратегии или брокера. Не следует завязываться
-// на эти данные при реализации логики работы Strategy или Broker
+// на эти данные при реализации логики работы Strategy или Broker.
+// Исключение: локальное использование в рамках реализации Strategy или Broker
 func (p *Position) SetExtra(key interface{}, val interface{}) *Position {
 	p.extraMtx.Lock()
 	defer p.extraMtx.Unlock()
@@ -232,6 +232,7 @@ type OpenPositionAction struct {
 	result chan OpenPositionActionResult
 }
 
+// IsValid проверяет, что действие валидно
 func (a *OpenPositionAction) IsValid() bool {
 	return a.Type == Long || a.Type == Short
 }
@@ -280,13 +281,13 @@ func NewClosePositionAction(positionID PositionID) ClosePositionAction {
 	}
 }
 
-// ClosePositionActionResult описывает результат закрытия позиции
+// ClosePositionActionResult описывает результат закрытия позиции.
 type ClosePositionActionResult struct {
 	Position Position
 	error    error
 }
 
-// Result возвращает результат выполнения действия на закрытия позиции
+// Result возвращает результат выполнения действия на закрытия позиции.
 func (a *ClosePositionAction) Result(ctx context.Context) (ClosePositionActionResult, error) {
 	select {
 	case <-ctx.Done():
@@ -298,7 +299,7 @@ func (a *ClosePositionAction) Result(ctx context.Context) (ClosePositionActionRe
 
 // ChangeConditionalOrderAction описывает действие на изменение условной заявки
 // позиции с идентификатором PositionID. При передаче StopLoss или TakeProfit
-// равным 0 данные значения не должны изменяться
+// равным 0 данные значения не должны изменяться.
 type ChangeConditionalOrderAction struct {
 	PositionID PositionID
 	StopLoss   float64
@@ -306,7 +307,7 @@ type ChangeConditionalOrderAction struct {
 	result     chan ChangeConditionalOrderActionResult
 }
 
-// Result возвращает канал, который вернет результат выполнения действия на изменения условной заявки
+// Result возвращает канал, который вернет результат выполнения действия на изменения условной заявки.
 func (a *ChangeConditionalOrderAction) Result(ctx context.Context) (ChangeConditionalOrderActionResult, error) {
 	select {
 	case <-ctx.Done():
@@ -323,7 +324,7 @@ type ChangeConditionalOrderActionResult struct {
 }
 
 // NewChangeConditionalOrderAction создает действие на изменение условной заявки по позиции
-// с указанным positionID, новыми значения stopLoss и takeProfit. Если менять stopLoss или takeProfit
+// с указанным positionID и новыми значения stopLoss и takeProfit. Если менять stopLoss или takeProfit
 // не требуется, то нужно передать их равными 0.
 func NewChangeConditionalOrderAction(positionID PositionID, stopLoss, takeProfit float64) ChangeConditionalOrderAction {
 	return ChangeConditionalOrderAction{
@@ -334,6 +335,7 @@ func NewChangeConditionalOrderAction(positionID PositionID, stopLoss, takeProfit
 	}
 }
 
+// Engine описывыет торговый движок. Создавать следует через конструктор New
 type Engine struct {
 	strategy                  Strategy
 	broker                    Broker
@@ -404,36 +406,36 @@ func (e *Engine) run(ctx context.Context) error {
 	}
 }
 
-// OnPositionOpened устанавливает коллбек fn на открытие позиции.
-// Актуальная позиция передается параметром в метод fn.
+// OnPositionOpened устанавливает коллбек f на открытие позиции.
+// Актуальная позиция передается параметром в метод f.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
 // Метод не потокобезопасен. Не следует вызывать в разных горутинах
 // и после запуска Engine
-func (e *Engine) OnPositionOpened(fn func(position Position)) *Engine {
-	e.onPositionOpened = fn
+func (e *Engine) OnPositionOpened(f func(position Position)) *Engine {
+	e.onPositionOpened = f
 	return e
 }
 
-// OnConditionalOrderChanged устанавливает коллбек fn на изменение условной заявки
-// по позиции. Актуальная позиция передается параметром в метод fn.
+// OnConditionalOrderChanged устанавливает коллбек f на изменение условной заявки
+// по позиции. Актуальная позиция передается параметром в метод f.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
 // Метод не потокобезопасен. Не следует вызывать в разных горутинах
 // и после запуска Engine
-func (e *Engine) OnConditionalOrderChanged(fn func(position Position)) *Engine {
-	e.onConditionalOrderChanged = fn
+func (e *Engine) OnConditionalOrderChanged(f func(position Position)) *Engine {
+	e.onConditionalOrderChanged = f
 	return e
 }
 
-// OnPositionClosed устанавливает коллбек fn на закрытие позиции.
-// Актуальная позиция передается параметром в метод fn.
+// OnPositionClosed устанавливает коллбек f на закрытие позиции.
+// Актуальная позиция передается параметром в метод f.
 // Возвращает указатель на Engine, реализуя текучий интерфейс.
 //
 // Метод не потокобезопасен. Не следует вызывать в разных горутинах
 // и после запуска Engine
-func (e *Engine) OnPositionClosed(fn func(position Position)) *Engine {
-	e.onPositionClosed = fn
+func (e *Engine) OnPositionClosed(f func(position Position)) *Engine {
+	e.onPositionClosed = f
 	return e
 }
 
