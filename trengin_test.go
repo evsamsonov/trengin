@@ -2,6 +2,7 @@ package trengin
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -228,6 +229,24 @@ func TestPosition_Extra(t *testing.T) {
 	assert.Equal(t, 123, position.Extra("test"))
 }
 
+func TestPosition_RangeExtra(t *testing.T) {
+	position := Position{
+		extraMtx: &sync.RWMutex{},
+		extra:    make(map[interface{}]interface{}),
+	}
+
+	position.SetExtra("key1", "value1")
+	position.SetExtra("key2", "value2")
+	position.SetExtra("key3", "value3")
+	position.RangeExtra(func(key interface{}, val interface{}) {
+		fmt.Printf("%s: %s\n", key, val)
+	})
+	// Output:
+	// key1: value1
+	// key2: value2
+	// key3: value3
+}
+
 func TestOpenPositionAction_IsValid(t *testing.T) {
 	t.Run("not valid", func(t *testing.T) {
 		action := OpenPositionAction{Type: 0}
@@ -273,7 +292,7 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	assert.Nil(t, err)
 	result := <-resultChan
 	assert.Equal(t, position, result.Position)
-	assert.Nil(t, result.Error)
+	assert.Nil(t, result.error)
 
 	positionClosed <- closedPosition
 	assert.True(t, onPositionOpenedCalled)
@@ -314,7 +333,7 @@ func TestEngine_doClosePosition(t *testing.T) {
 	assert.Nil(t, err)
 	result := <-resultChan
 	assert.Equal(t, position, result.Position)
-	assert.Nil(t, result.Error)
+	assert.Nil(t, result.error)
 
 	cancel()
 	engine.waitGroup.Wait()
@@ -345,7 +364,7 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 	assert.Nil(t, err)
 	result := <-resultChan
 	assert.Equal(t, position, result.Position)
-	assert.Nil(t, result.Error)
+	assert.Nil(t, result.error)
 	assert.True(t, onChangeConditionalOrderCalled)
 
 	cancel()

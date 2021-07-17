@@ -209,8 +209,8 @@ func (p *Position) SetExtra(key interface{}, val interface{}) *Position {
 	return p
 }
 
-// todo нужен тест
-func (p *Position) RangeExtra(f func(key interface{}, value interface{})) {
+// RangeExtra применяет функцию f ко всем элементам списка Extra
+func (p *Position) RangeExtra(f func(key interface{}, val interface{})) {
 	p.extraMtx.RLock()
 	defer p.extraMtx.RUnlock()
 	for k, v := range p.extra {
@@ -240,7 +240,7 @@ func (a *OpenPositionAction) IsValid() bool {
 type OpenPositionActionResult struct {
 	Position Position
 	Closed   PositionClosed // Канал, для отслеживания закрытия сделки
-	Error    error
+	error    error
 }
 
 // NewOpenPositionAction создает действие на открытие позиции с типом positionType,
@@ -262,7 +262,7 @@ func (a *OpenPositionAction) Result(ctx context.Context) (OpenPositionActionResu
 	case <-ctx.Done():
 		return OpenPositionActionResult{}, ctx.Err()
 	case result := <-a.result:
-		return result, nil
+		return result, result.error
 	}
 }
 
@@ -283,17 +283,16 @@ func NewClosePositionAction(positionID PositionID) ClosePositionAction {
 // ClosePositionActionResult описывает результат закрытия позиции
 type ClosePositionActionResult struct {
 	Position Position
-	Error    error
+	error    error
 }
 
-// todo подумать на счет ошибки, нужна ли она в структуре - может быть сделать неэкспортируемой
 // Result возвращает результат выполнения действия на закрытия позиции
 func (a *ClosePositionAction) Result(ctx context.Context) (ClosePositionActionResult, error) {
 	select {
 	case <-ctx.Done():
 		return ClosePositionActionResult{}, ctx.Err()
 	case result := <-a.result:
-		return result, nil
+		return result, result.error
 	}
 }
 
@@ -313,14 +312,14 @@ func (a *ChangeConditionalOrderAction) Result(ctx context.Context) (ChangeCondit
 	case <-ctx.Done():
 		return ChangeConditionalOrderActionResult{}, ctx.Err()
 	case result := <-a.result:
-		return result, nil
+		return result, result.error
 	}
 }
 
 // ChangeConditionalOrderActionResult описывает результат изменения условной заявки
 type ChangeConditionalOrderActionResult struct {
 	Position Position
-	Error    error
+	error    error
 }
 
 // NewChangeConditionalOrderAction создает действие на изменение условной заявки по позиции
@@ -449,7 +448,7 @@ func (e *Engine) doOpenPosition(ctx context.Context, action OpenPositionAction) 
 	case action.result <- OpenPositionActionResult{
 		Position: position,
 		Closed:   closed1,
-		Error:    err,
+		error:    err,
 	}:
 	}
 
@@ -486,7 +485,7 @@ func (e *Engine) doClosePosition(ctx context.Context, action ClosePositionAction
 		return fmt.Errorf("close position: %w", ErrSendResultTimeout)
 	case action.result <- ClosePositionActionResult{
 		Position: position,
-		Error:    err,
+		error:    err,
 	}:
 	}
 	return nil
@@ -502,7 +501,7 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 		return fmt.Errorf("change conditional order: %w", ErrSendResultTimeout)
 	case action.result <- ChangeConditionalOrderActionResult{
 		Position: position,
-		Error:    err,
+		error:    err,
 	}:
 	}
 
