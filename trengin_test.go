@@ -2,11 +2,14 @@ package trengin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/mock"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -363,4 +366,79 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 
 	cancel()
 	engine.waitGroup.Wait()
+}
+
+func TestEngine_Run(t *testing.T) {
+	t.Run("context canceled", func(t *testing.T) {
+		strategy := &MockStrategy{}
+		ctx, cancel := context.WithCancel(context.Background())
+
+		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
+		strategy.On("Errors").Return(make(<-chan error))
+		strategy.On("Actions").Return(make(Actions))
+
+		engine := Engine{strategy: strategy}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := engine.Run(ctx)
+			assert.ErrorIs(t, err, context.Canceled)
+		}()
+		cancel()
+		wg.Wait()
+	})
+
+	t.Run("error received", func(t *testing.T) {
+		strategy := &MockStrategy{}
+		ctx := context.Background()
+
+		errorsChan := make(chan error)
+		var errorsReadChan <-chan error
+		errorsReadChan = errorsChan
+		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
+		strategy.On("Errors").Return(errorsReadChan)
+		strategy.On("Actions").Return(make(Actions))
+
+		engine := Engine{strategy: strategy}
+
+		expectedErr := errors.New("error")
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := engine.Run(ctx)
+			assert.ErrorIs(t, err, expectedErr)
+		}()
+
+		errorsChan <- expectedErr
+		wg.Wait()
+	})
+
+	t.Run("unknown action", func(t *testing.T) {
+		strategy := &MockStrategy{}
+		ctx := context.Background()
+
+		actionsChan := make(chan interface{})
+		var actionsReadChan Actions
+		actionsReadChan = actionsChan
+		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
+		strategy.On("Errors").Return(make(<-chan error))
+		strategy.On("Actions").Return(actionsReadChan)
+
+		engine := Engine{strategy: strategy}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := engine.Run(ctx)
+			assert.ErrorIs(t, err, ErrUnknownAction)
+		}()
+
+		actionsChan <- "unknown action"
+		wg.Wait()
+	})
 }
