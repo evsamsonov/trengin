@@ -395,7 +395,7 @@ func TestEngine_Run(t *testing.T) {
 		ctx := context.Background()
 
 		errorsChan := make(chan error)
-		var errorsReadChan <-chan error
+		var errorsReadChan <-chan error //nolint: gosimple
 		errorsReadChan = errorsChan
 		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
 		strategy.On("Errors").Return(errorsReadChan)
@@ -422,7 +422,7 @@ func TestEngine_Run(t *testing.T) {
 		ctx := context.Background()
 
 		actionsChan := make(chan interface{})
-		var actionsReadChan Actions
+		var actionsReadChan Actions //nolint: gosimple
 		actionsReadChan = actionsChan
 		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
 		strategy.On("Errors").Return(make(<-chan error))
