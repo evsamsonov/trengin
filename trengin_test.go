@@ -260,7 +260,6 @@ func TestOpenPositionAction_IsValid(t *testing.T) {
 }
 
 func TestEngine_doOpenPosition(t *testing.T) {
-	strategy := &MockStrategy{}
 	broker := &MockBroker{}
 	position := Position{}
 	closedPosition := Position{}
@@ -269,8 +268,7 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	var onPositionOpenedCalled bool
 	var onPositionClosedCalled int64
 	engine := Engine{
-		strategy: strategy,
-		broker:   broker,
+		broker: broker,
 		onPositionOpened: func(p Position) {
 			assert.Equal(t, position, p)
 			onPositionOpenedCalled = true
@@ -315,11 +313,9 @@ waitCalledLoop:
 }
 
 func TestEngine_doClosePosition(t *testing.T) {
-	strategy := &MockStrategy{}
 	broker := &MockBroker{}
 	position := Position{}
 	engine := Engine{
-		strategy:          strategy,
 		broker:            broker,
 		sendResultTimeout: 5 * time.Second,
 	}
@@ -340,13 +336,11 @@ func TestEngine_doClosePosition(t *testing.T) {
 }
 
 func TestEngine_doChangeConditionalOrder(t *testing.T) {
-	strategy := &MockStrategy{}
 	broker := &MockBroker{}
 	position := Position{}
 
 	var onChangeConditionalOrderCalled bool
 	engine := Engine{
-		strategy:          strategy,
 		broker:            broker,
 		sendResultTimeout: 5 * time.Second,
 		onConditionalOrderChanged: func(p Position) {
