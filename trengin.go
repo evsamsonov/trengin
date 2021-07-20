@@ -55,7 +55,7 @@ func (t PositionType) Multiplier() float64 {
 	}
 }
 
-//go:generate docker run -v ${PWD}:/app -w /app/ vektra/mockery --name Strategy --inpackage --case snake
+//go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Strategy --inpackage --case snake
 
 // Strategy описывает интерфейс торговой стратегии. Позволяет реализовать стратегию,
 // взаимодействуя с Engine через каналы, которые возвращают методы Actions и Errors.
@@ -80,7 +80,7 @@ type Strategy interface {
 // Неожиданные типы приведут к ошибке и завершению работы Engine
 type Actions <-chan interface{}
 
-//go:generate docker run -v ${PWD}:/app -w /app/ vektra/mockery --name Broker --inpackage --case snake
+//go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Broker --inpackage --case snake
 
 // Broker описывает интерфейс клиента, исполняющего торговые операции
 // и отслеживающего статус условных заявок по позициям.
