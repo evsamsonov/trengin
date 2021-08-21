@@ -5,7 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/evsamsonov/trengin)](https://goreportcard.com/report/github.com/evsamsonov/trengin)
 [![codecov](https://codecov.io/gh/evsamsonov/trengin/branch/master/graph/badge.svg?token=AC751PKE5Y)](https://codecov.io/gh/evsamsonov/trengin)
 
-A golang library for building an automated trading robot. It provides interfaces for implementation of a trading strategy and execution trading operations.
+Golang библиотека для создания торгового робота. Связывает торговую стратегию и реализацию исполнения торговых операций. Позволяет гибко описать стратегию.
 
 ## Содержание 
 
