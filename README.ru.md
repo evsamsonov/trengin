@@ -5,34 +5,34 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/evsamsonov/trengin)](https://goreportcard.com/report/github.com/evsamsonov/trengin)
 [![codecov](https://codecov.io/gh/evsamsonov/trengin/branch/master/graph/badge.svg?token=AC751PKE5Y)](https://codecov.io/gh/evsamsonov/trengin)
 
-A golang library for building an automated trading robot. It provides interfaces for implementation of a trading strategy and execution of trading operations.
+Golang библиотека для создания торгового робота. Связывает торговую стратегию и реализацию исполнения торговых операций. Позволяет гибко описать стратегию.
 
-## Contents 
+## Содержание 
 
-- [Installing](#installing)
-- [How to use](#how-to-use)
+- [Установка](#установка)
+- [Как использовать](#как-использовать)
 - [Основные сущности](#основные-сущности)
-- [How to implement Strategy](#how-to-implement-strategy)
-- [How to implement Broker](#how-to-implement-broker)
+- [Как реализовать торговую стратегию](#как-реализовать-торговую-стратегию)
+- [Как реализовать модуль исполнения торговых операций](#как-реализовать-модуль-исполнения-торговых-операций)
 - [Описание сущности Position](#описание-сущности-position)
 - [Дополнительные действия на события](#дополнительные-действия-на-события)
 - [Что дальше](#что-дальше)
 
-## Installing
+## Установка
 
 ```shell
 go get github.com/evsamsonov/trengin
 ```
 
-## How to use
+## Как использовать
 
-Import the package.
+Импортировать пакет.
 
 ```go
 import "github.com/evsamsonov/trengin"
 ```
 
-Create an instance of Engine by passing implementations of Strategy and Broker.
+Создать экземпляр, передав объекты реализующие интерфейс Strategy и Broker.
 
 ```go
 
@@ -42,16 +42,16 @@ tradingEngine.Run()
 
 ## Основные сущности
 
-|  Name  | Description | 
+|  Название  | Описание | 
 | ------------- | ------------- | 
-| `Engine`  | Trading engine  |
-| `Strategy`  | Trading strategy  |
+| `Engine`  | Торговый движок  |
+| `Strategy`  | Торговая стратегия  |
 | `Broker`  | Модуль исполнения торговых операций  |
-| `Actions`  | Channel for sending trading actions  |
-| `Position`  | Trading position |
-| `PositionClosed` | Channel for receiving a closed position |
+| `Actions`  | Канал для отправки торговых действий  |
+| `Position`  | Торговая позиция  |
+| `PositionClosed` | Канал, в который будет отправлена позиция при закрытии |
 
-## How to implement a trading strategy
+## Как реализовать торговую стратегию
 
 Торговая стратегия описана следующим интерфейсом.
 ```go
@@ -72,11 +72,11 @@ type Strategy interface {
 
 ### OpenPositionAction
 
-Opening a position.
+Открытие позиции.
 
-Constructor: `NewOpenPositionAction`
+Конструктор: `NewOpenPositionAction`
 
-| Name | Description |
+| Параметр | Описание |
 | ------------- | ------------- |
 | `positionType` | Тип позиции (покупка или продажа) |
 | `stopLossIndent` | Отступ стоп-лосса от цены открытия позиции |
@@ -84,11 +84,11 @@ Constructor: `NewOpenPositionAction`
 
 ### ChangeConditionalOrderAction
 
-Changing a condition order.
+Изменение условной заявки.
 
-Constructor: `NewChangeConditionalOrderAction`
+Конструктор: `NewChangeConditionalOrderAction`
 
-| Name | Description |
+| Наименование | Описание |
 | ------------- | ------------- |
 | `positionID` | Идентификатор позиции |
 | `stopLoss` | Новое значения для стоп-лосса (если равно 0, то не изменять) |
@@ -96,11 +96,11 @@ Constructor: `NewChangeConditionalOrderAction`
 
 ### ClosePositionAction
 
-Closing a position.
+Закрытие позиции.
 
-Constructor: `NewClosePositionAction`
+Конструктор: `NewClosePositionAction`
 
-| Name | Description |
+| Наименование | Описание |
 | ------------- | ------------- |
 | `positionID` | Идентификатор позиции |
 
@@ -153,9 +153,9 @@ type Broker interface {
 
 Создается через конструктор `NewPosition` по `action` с временем открытия `openTime` и ценой открытия `openPrice`. Позиция должна создаваться и закрываться в реализации `Broker`. В реализацию `Strategy` передается копия позиции с возможностью установить дополнительные данные.
 
-**Fields**
+**Поля**
 
-| Name | Description |
+| Название | Описание |
 | ------------- | ------------- |
 | `ID` | Уникальный идентификатор в рамках запуска |
 | `Type` | Тип |
@@ -166,9 +166,9 @@ type Broker interface {
 | `StopLoss` | Текущий стоп лосс |
 | `TakeProfit` | Текущий тейк профит |
 
-**Methods**
+**Методы**
 
-|  Name  | Description | 
+|  Название  | Описание | 
 | ------------- | ------------- | 
 | `Close` | Метод для закрытия позиции. Принимает время закрытия `closeTime` и цену закрытия `closePrice`. Если позиция уже закрыта, вернет ошибку `ErrAlreadyClosed` |
 | `Closed` | Возвращает канал, который будет закрыт при закрытии позиции |
@@ -185,16 +185,15 @@ type Broker interface {
 
 Для выполнения дополнительных действий (отправка оповещений, сохранение позиции в БД и т. п.) торговый движок предоставляется методы, с помощью которых можно установить колбэки. Методы не потокобезопасны, вызывать следует до запуска стратегии в работу. 
 
-| Method | Description |
+|  Метод | Описание |
 | ------------- | ------------- |
 | OnPositionOpened  | Устанавливает коллбек на открытие позиции  |
 | OnConditionalOrderChanged  | Устанавливает коллбек на изменение условной заявки  |
 | OnPositionClosed  | Устанавливает коллбек на закрытие позиции |
 
-## So, what next?
+## Что дальше
 
 * Реализовать модули исполнения торговых операций для различных торговых систем.
 * Добавить возможность открывать позиции по разным торговым инструментам.
 * Реализовать инициализацию торгового движка открытыми сделками.
-
 
