@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stretchr/testify/assert"
@@ -71,7 +73,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			openPrice: 10,
 			openTime:  time.Unix(1, 0),
 			want: &Position{
-				ID:         1,
+				ID:         PositionID(uuid.New()),
 				Type:       Long,
 				OpenTime:   time.Unix(1, 0),
 				OpenPrice:  10,
@@ -92,7 +94,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			openPrice: 10,
 			openTime:  time.Unix(1, 0),
 			want: &Position{
-				ID:         1,
+				ID:         PositionID(uuid.New()),
 				Type:       Short,
 				OpenTime:   time.Unix(1, 0),
 				OpenPrice:  10,
