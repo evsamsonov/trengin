@@ -141,8 +141,6 @@ type Position struct {
 	closed     chan struct{}
 }
 
-var positionIDCounter int64
-
 // NewPosition создает новую позицию по action, с временем открытия openTime
 // и с ценой открытия openPrice. Если action невалиден, то вернет ErrActionNotValid.
 func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float64) (*Position, error) {

@@ -47,7 +47,7 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 	conn, err := grpc.Dial(
 		tinkoffHost,
 		grpc.WithTransportCredentials(
-			credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}),
+			credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}), //nolint: gosec
 		),
 		grpc.WithBlock(),
 	)
@@ -223,7 +223,7 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 		return nil
 	}
 
-	closePrice = closePrice / float64(executedQuantity)
+	closePrice /= float64(executedQuantity)
 	err := t.currentPosition.Close(closePrice)
 	if err != nil {
 		return fmt.Errorf("close: %w", err)
