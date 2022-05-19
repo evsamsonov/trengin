@@ -15,7 +15,12 @@ type currentPosition struct {
 	mtx          sync.RWMutex
 }
 
-func (p *currentPosition) Set(position *trengin.Position, stopLossID, takeProfitID string, closed chan trengin.Position) {
+func (p *currentPosition) Set(
+	position *trengin.Position,
+	stopLossID,
+	takeProfitID string,
+	closed chan trengin.Position,
+) {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 

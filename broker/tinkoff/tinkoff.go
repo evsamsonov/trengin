@@ -142,7 +142,10 @@ func (t *Tinkoff) OpenPosition(
 	return *position, positionClosed, nil
 }
 
-func (t *Tinkoff) ChangeConditionalOrder(ctx context.Context, action trengin.ChangeConditionalOrderAction) (trengin.Position, error) {
+func (t *Tinkoff) ChangeConditionalOrder(
+	ctx context.Context,
+	action trengin.ChangeConditionalOrderAction,
+) (trengin.Position, error) {
 	if !t.currentPosition.Exist() {
 		return trengin.Position{}, fmt.Errorf("no open position")
 	}
@@ -173,13 +176,12 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, action trengin.ClosePositio
 		return trengin.Position{}, fmt.Errorf("no open position")
 	}
 
-	position := t.currentPosition.Position()
-
+	ctx = t.ctxWithAuth(ctx)
 	if err := t.cancelStopOrder(ctx); err != nil {
 		return trengin.Position{}, err
 	}
 
-	ctx = t.ctxWithAuth(ctx)
+	position := t.currentPosition.Position()
 	_, err := t.openMarketOrder(ctx, position.Type.Inverse())
 	if err != nil {
 		return trengin.Position{}, fmt.Errorf("open market order: %w", err)
