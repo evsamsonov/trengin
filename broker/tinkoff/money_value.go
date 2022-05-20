@@ -1,20 +1,20 @@
 package tinkoff
 
-type money interface {
+type Money interface {
 	GetUnits() int64
 	GetNano() int32
 }
 
-type moneyValue struct {
-	money
+type MoneyValue struct {
+	Money
 }
 
-func newMoneyValue(v money) *moneyValue {
-	return &moneyValue{
-		money: v,
+func NewMoneyValue(v Money) *MoneyValue {
+	return &MoneyValue{
+		Money: v,
 	}
 }
 
-func (v *moneyValue) ToFloat() float64 {
+func (v *MoneyValue) ToFloat() float64 {
 	return float64(v.GetUnits()) + float64(v.GetNano())/10e8
 }

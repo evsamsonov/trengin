@@ -216,7 +216,7 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 	var closePrice float64
 	for _, trade := range orderTrades.GetTrades() {
 		executedQuantity += trade.GetQuantity()
-		price := newMoneyValue(trade.Price)
+		price := NewMoneyValue(trade.Price)
 		closePrice += price.ToFloat() * float64(executedQuantity)
 	}
 
@@ -246,7 +246,7 @@ func (t *Tinkoff) ctxWithAuth(ctx context.Context) context.Context {
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
-func (t *Tinkoff) openMarketOrder(ctx context.Context, positionType trengin.PositionType) (*moneyValue, error) {
+func (t *Tinkoff) openMarketOrder(ctx context.Context, positionType trengin.PositionType) (*MoneyValue, error) {
 	direction := investapi.OrderDirection_ORDER_DIRECTION_BUY
 	if positionType.IsShort() {
 		direction = investapi.OrderDirection_ORDER_DIRECTION_SELL
@@ -273,7 +273,7 @@ func (t *Tinkoff) openMarketOrder(ctx context.Context, positionType trengin.Posi
 	}
 
 	t.logger.Info("Order was executed", zap.Any("orderRequest", orderRequest), zap.Any("order", order))
-	return newMoneyValue(order.ExecutedOrderPrice), nil
+	return NewMoneyValue(order.ExecutedOrderPrice), nil
 }
 
 func (t *Tinkoff) setStopLoss(
@@ -332,7 +332,7 @@ func (t *Tinkoff) cancelStopOrder(ctx context.Context) error {
 	return nil
 }
 
-func (t *Tinkoff) stopLossPriceByOpen(openPrice *moneyValue, action trengin.OpenPositionAction) *investapi.Quotation {
+func (t *Tinkoff) stopLossPriceByOpen(openPrice *MoneyValue, action trengin.OpenPositionAction) *investapi.Quotation {
 	stopLoss := openPrice.ToFloat() - action.StopLossIndent*action.Type.Multiplier()
 	return t.stopLossPrice(stopLoss)
 }
