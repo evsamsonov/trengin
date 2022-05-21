@@ -64,6 +64,10 @@ func (t PositionType) IsShort() bool {
 	return t == Short
 }
 
+func (t PositionType) IsValid() bool {
+	return t == Long || t == Short
+}
+
 func (t PositionType) Inverse() PositionType {
 	if t.IsShort() {
 		return Long
@@ -256,7 +260,7 @@ type OpenPositionAction struct {
 
 // IsValid проверяет, что действие валидно
 func (a *OpenPositionAction) IsValid() bool {
-	return a.Type == Long || a.Type == Short
+	return a.Type.IsValid()
 }
 
 // OpenPositionActionResult результат открытия позиции
