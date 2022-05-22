@@ -26,6 +26,7 @@ const (
 type Tinkoff struct {
 	accountID         string
 	token             string
+	appName           string
 	orderClient       investapi.OrdersServiceClient
 	stopOrderClient   investapi.StopOrdersServiceClient
 	orderStreamClient investapi.OrdersStreamServiceClient
@@ -40,6 +41,12 @@ type Option func(*Tinkoff)
 func WithLogger(logger *zap.Logger) Option {
 	return func(t *Tinkoff) {
 		t.logger = logger
+	}
+}
+
+func WithAppName(appName string) Option {
+	return func(t *Tinkoff) {
+		t.appName = appName
 	}
 }
 
@@ -242,6 +249,7 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 func (t *Tinkoff) ctxWithAuth(ctx context.Context) context.Context {
 	md := metadata.New(map[string]string{
 		"Authorization": "Bearer " + t.token,
+		"x-app-name":    t.appName,
 	})
 	return metadata.NewOutgoingContext(ctx, md)
 }
