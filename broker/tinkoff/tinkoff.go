@@ -30,7 +30,9 @@ type Tinkoff struct {
 	orderClient       investapi.OrdersServiceClient
 	stopOrderClient   investapi.StopOrdersServiceClient
 	orderStreamClient investapi.OrdersStreamServiceClient
+	instrumentClient  investapi.InstrumentsServiceClient
 	instrumentFIGI    string
+	instrument        *investapi.Instrument
 	tradedQuantity    int64
 	currentPosition   *currentPosition
 	logger            *zap.Logger
@@ -70,6 +72,7 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 		orderClient:       investapi.NewOrdersServiceClient(conn),
 		stopOrderClient:   investapi.NewStopOrdersServiceClient(conn),
 		orderStreamClient: investapi.NewOrdersStreamServiceClient(conn),
+		instrumentClient:  investapi.NewInstrumentsServiceClient(conn),
 		currentPosition:   &currentPosition{},
 		logger:            zap.NewNop(),
 	}
@@ -80,7 +83,17 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 }
 
 func (t *Tinkoff) Run(ctx context.Context) error {
-	ctx = t.ctxWithAuth(ctx)
+	ctx = t.ctxWithMetadata(ctx)
+
+	instrumentResponse, err := t.instrumentClient.GetInstrumentBy(ctx, &investapi.InstrumentRequest{
+		IdType: investapi.InstrumentIdType_INSTRUMENT_ID_TYPE_FIGI,
+		Id:     t.instrumentFIGI,
+	})
+	if err != nil {
+		return fmt.Errorf("get instrument by: %w", err)
+	}
+	t.instrument = instrumentResponse.GetInstrument()
+
 	stream, err := t.orderStreamClient.TradesStream(ctx, &investapi.TradesStreamRequest{})
 	if err != nil {
 		return fmt.Errorf("trades stream: %w", err)
@@ -120,7 +133,7 @@ func (t *Tinkoff) OpenPosition(
 		return trengin.Position{}, nil, fmt.Errorf("not support multiple open position")
 	}
 
-	ctx = t.ctxWithAuth(ctx)
+	ctx = t.ctxWithMetadata(ctx)
 	openPrice, err := t.openMarketOrder(ctx, action.Type)
 	if err != nil {
 		return trengin.Position{}, nil, fmt.Errorf("open market order: %w", err)
@@ -157,7 +170,7 @@ func (t *Tinkoff) ChangeConditionalOrder(
 		return trengin.Position{}, fmt.Errorf("no open position")
 	}
 
-	ctx = t.ctxWithAuth(ctx)
+	ctx = t.ctxWithMetadata(ctx)
 	if err := t.cancelStopOrder(ctx); err != nil {
 		return trengin.Position{}, err
 	}
@@ -183,7 +196,7 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, action trengin.ClosePositio
 		return trengin.Position{}, fmt.Errorf("no open position")
 	}
 
-	ctx = t.ctxWithAuth(ctx)
+	ctx = t.ctxWithMetadata(ctx)
 	if err := t.cancelStopOrder(ctx); err != nil {
 		return trengin.Position{}, err
 	}
@@ -246,7 +259,7 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 	return nil
 }
 
-func (t *Tinkoff) ctxWithAuth(ctx context.Context) context.Context {
+func (t *Tinkoff) ctxWithMetadata(ctx context.Context) context.Context {
 	md := metadata.New(map[string]string{
 		"Authorization": "Bearer " + t.token,
 		"x-app-name":    t.appName,
@@ -296,13 +309,11 @@ func (t *Tinkoff) setStopLoss(
 	stopOrderRequest := &investapi.PostStopOrderRequest{
 		Figi:           t.instrumentFIGI,
 		Quantity:       t.tradedQuantity,
-		Price:          nil, // todo поудалять нулевые?
 		StopPrice:      stopPrice,
 		Direction:      stopOrderDirection,
 		AccountId:      t.accountID,
 		ExpirationType: investapi.StopOrderExpirationType_STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL,
 		StopOrderType:  investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS,
-		ExpireDate:     nil,
 	}
 
 	stopOrder, err := t.stopOrderClient.PostStopOrder(ctx, stopOrderRequest)
@@ -347,8 +358,14 @@ func (t *Tinkoff) stopLossPriceByOpen(openPrice *MoneyValue, action trengin.Open
 
 func (t *Tinkoff) stopLossPrice(stopLoss float64) *investapi.Quotation {
 	stopLossUnits, stopLossNano := math.Modf(stopLoss)
+
+	var roundStopLossNano int32
+	if t.instrument.MinPriceIncrement != nil {
+		roundStopLossNano = int32(stopLossNano*10e8) /
+			t.instrument.MinPriceIncrement.GetNano() * t.instrument.MinPriceIncrement.GetNano()
+	}
 	return &investapi.Quotation{
 		Units: int64(stopLossUnits),
-		Nano:  int32(stopLossNano * 10e8),
+		Nano:  roundStopLossNano,
 	}
 }
