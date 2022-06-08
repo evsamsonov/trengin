@@ -1,3 +1,5 @@
+//
+//
 // https://tinkoff.github.io/investAPI/
 package tinkoff
 
@@ -10,13 +12,14 @@ import (
 	"math"
 	"time"
 
-	"github.com/evsamsonov/trengin"
 	"github.com/google/uuid"
 	investapi "github.com/tinkoff/invest-api-go-sdk"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/evsamsonov/trengin"
 )
 
 const (
@@ -139,7 +142,7 @@ func (t *Tinkoff) OpenPosition(
 		return trengin.Position{}, nil, fmt.Errorf("open market order: %w", err)
 	}
 
-	var stopLossID string
+	var stopLossID, takeProfitID string
 	if action.StopLossIndent != 0 {
 		stopLossID, err = t.setStopLoss(ctx, t.stopLossPriceByOpen(openPrice, action), action.Type)
 		if err != nil {
@@ -148,7 +151,10 @@ func (t *Tinkoff) OpenPosition(
 	}
 
 	if action.TakeProfitIndent != 0 {
-		t.logger.Warn("Take profit is not implemented")
+		takeProfitID, err = t.setTakeProfit(ctx, t.takeProfitPriceByOpen(openPrice, action), action.Type)
+		if err != nil {
+			return trengin.Position{}, nil, fmt.Errorf("set stop order: %w", err)
+		}
 	}
 
 	position, err := trengin.NewPosition(action, time.Now(), openPrice.ToFloat())
@@ -157,7 +163,7 @@ func (t *Tinkoff) OpenPosition(
 	}
 
 	positionClosed := make(chan trengin.Position)
-	t.currentPosition.Set(position, stopLossID, "", positionClosed)
+	t.currentPosition.Set(position, stopLossID, takeProfitID, positionClosed)
 
 	return *position, positionClosed, nil
 }
@@ -275,7 +281,6 @@ func (t *Tinkoff) openMarketOrder(ctx context.Context, positionType trengin.Posi
 	orderRequest := &investapi.PostOrderRequest{
 		Figi:      t.instrumentFIGI,
 		Quantity:  t.tradedQuantity,
-		Price:     nil, // todo уточнить, почему невыгодная цена
 		Direction: direction,
 		AccountId: t.accountID,
 		OrderType: investapi.OrderType_ORDER_TYPE_MARKET,
@@ -297,23 +302,51 @@ func (t *Tinkoff) openMarketOrder(ctx context.Context, positionType trengin.Posi
 	return NewMoneyValue(order.ExecutedOrderPrice), nil
 }
 
+type stopOrderType int
+
+const (
+	stopLossStopOrderType stopOrderType = iota + 1
+	takeProfitStopOrderType
+)
+
 func (t *Tinkoff) setStopLoss(
 	ctx context.Context,
-	stopPrice *investapi.Quotation,
+	price *investapi.Quotation,
 	positionType trengin.PositionType,
+) (string, error) {
+	return t.setStopOrder(ctx, price, positionType, stopLossStopOrderType)
+}
+
+func (t *Tinkoff) setTakeProfit(
+	ctx context.Context,
+	price *investapi.Quotation,
+	positionType trengin.PositionType,
+) (string, error) {
+	return t.setStopOrder(ctx, price, positionType, takeProfitStopOrderType)
+}
+
+func (t *Tinkoff) setStopOrder(
+	ctx context.Context,
+	price *investapi.Quotation,
+	positionType trengin.PositionType,
+	orderType stopOrderType,
 ) (string, error) {
 	stopOrderDirection := investapi.StopOrderDirection_STOP_ORDER_DIRECTION_BUY
 	if positionType.IsLong() {
 		stopOrderDirection = investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL
 	}
+	reqStopOrderType := investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS
+	if orderType == takeProfitStopOrderType {
+		reqStopOrderType = investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT
+	}
 	stopOrderRequest := &investapi.PostStopOrderRequest{
 		Figi:           t.instrumentFIGI,
 		Quantity:       t.tradedQuantity,
-		StopPrice:      stopPrice,
+		StopPrice:      price,
 		Direction:      stopOrderDirection,
 		AccountId:      t.accountID,
 		ExpirationType: investapi.StopOrderExpirationType_STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL,
-		StopOrderType:  investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS,
+		StopOrderType:  reqStopOrderType,
 	}
 
 	stopOrder, err := t.stopOrderClient.PostStopOrder(ctx, stopOrderRequest)
@@ -356,13 +389,18 @@ func (t *Tinkoff) stopLossPriceByOpen(openPrice *MoneyValue, action trengin.Open
 	return t.stopLossPrice(stopLoss)
 }
 
+func (t *Tinkoff) takeProfitPriceByOpen(openPrice *MoneyValue, action trengin.OpenPositionAction) *investapi.Quotation {
+	stopLoss := openPrice.ToFloat() + action.StopLossIndent*action.Type.Multiplier()
+	return t.stopLossPrice(stopLoss)
+}
+
 func (t *Tinkoff) stopLossPrice(stopLoss float64) *investapi.Quotation {
 	stopLossUnits, stopLossNano := math.Modf(stopLoss)
 
 	var roundStopLossNano int32
 	if t.instrument.MinPriceIncrement != nil {
-		roundStopLossNano = int32(stopLossNano*10e8) /
-			t.instrument.MinPriceIncrement.GetNano() * t.instrument.MinPriceIncrement.GetNano()
+		roundStopLossNano = int32(math.Round(stopLossNano*10e8/float64(t.instrument.MinPriceIncrement.GetNano()))) *
+			t.instrument.MinPriceIncrement.GetNano()
 	}
 	return &investapi.Quotation{
 		Units: int64(stopLossUnits),
