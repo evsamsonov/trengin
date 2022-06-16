@@ -182,7 +182,7 @@ func (t *Tinkoff) ChangeConditionalOrder(
 	}
 
 	if action.StopLoss != 0 {
-		stopLossID, err := t.setStopLoss(ctx, t.stopLossPrice(action.StopLoss), t.currentPosition.position.Type)
+		stopLossID, err := t.setStopLoss(ctx, t.stopOrderPrice(action.StopLoss), t.currentPosition.position.Type)
 		if err != nil {
 			return trengin.Position{}, err
 		}
@@ -386,24 +386,24 @@ func (t *Tinkoff) cancelStopOrder(ctx context.Context) error {
 
 func (t *Tinkoff) stopLossPriceByOpen(openPrice *MoneyValue, action trengin.OpenPositionAction) *investapi.Quotation {
 	stopLoss := openPrice.ToFloat() - action.StopLossIndent*action.Type.Multiplier()
-	return t.stopLossPrice(stopLoss)
+	return t.stopOrderPrice(stopLoss)
 }
 
 func (t *Tinkoff) takeProfitPriceByOpen(openPrice *MoneyValue, action trengin.OpenPositionAction) *investapi.Quotation {
-	stopLoss := openPrice.ToFloat() + action.StopLossIndent*action.Type.Multiplier()
-	return t.stopLossPrice(stopLoss)
+	takeProfit := openPrice.ToFloat() + action.TakeProfitIndent*action.Type.Multiplier()
+	return t.stopOrderPrice(takeProfit)
 }
 
-func (t *Tinkoff) stopLossPrice(stopLoss float64) *investapi.Quotation {
-	stopLossUnits, stopLossNano := math.Modf(stopLoss)
+func (t *Tinkoff) stopOrderPrice(stopLoss float64) *investapi.Quotation {
+	stopOrderUnits, stopOrderNano := math.Modf(stopLoss)
 
-	var roundStopLossNano int32
+	var roundStopOrderNano int32
 	if t.instrument.MinPriceIncrement != nil {
-		roundStopLossNano = int32(math.Round(stopLossNano*10e8/float64(t.instrument.MinPriceIncrement.GetNano()))) *
+		roundStopOrderNano = int32(math.Round(stopOrderNano*10e8/float64(t.instrument.MinPriceIncrement.GetNano()))) *
 			t.instrument.MinPriceIncrement.GetNano()
 	}
 	return &investapi.Quotation{
-		Units: int64(stopLossUnits),
-		Nano:  roundStopLossNano,
+		Units: int64(stopOrderUnits),
+		Nano:  roundStopOrderNano,
 	}
 }
