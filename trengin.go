@@ -19,8 +19,9 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 )
 
 type (
-	PositionID   int64
+	PositionID   uuid.UUID
 	PositionType int
 )
 
@@ -53,6 +54,33 @@ func (t PositionType) Multiplier() float64 {
 	default:
 		return 0
 	}
+}
+
+func (t PositionType) IsLong() bool {
+	return t == Long
+}
+
+func (t PositionType) IsShort() bool {
+	return t == Short
+}
+
+func (t PositionType) IsValid() bool {
+	return t == Long || t == Short
+}
+
+func (t PositionType) Inverse() PositionType {
+	if t.IsShort() {
+		return Long
+	}
+	return Short
+}
+
+func NewPositionID() PositionID {
+	return PositionID(uuid.New())
+}
+
+func (p PositionID) String() string {
+	return uuid.UUID(p).String()
 }
 
 //go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Strategy --inpackage --case snake
@@ -117,8 +145,6 @@ type Position struct {
 	closed     chan struct{}
 }
 
-var positionIDCounter int64
-
 // NewPosition создает новую позицию по action, с временем открытия openTime
 // и с ценой открытия openPrice. Если action невалиден, то вернет ErrActionNotValid.
 func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float64) (*Position, error) {
@@ -133,7 +159,7 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 		takeProfit = openPrice + action.TakeProfitIndent*action.Type.Multiplier()
 	}
 	return &Position{
-		ID:         PositionID(atomic.AddInt64(&positionIDCounter, 1)),
+		ID:         NewPositionID(),
 		Type:       action.Type,
 		OpenTime:   openTime,
 		OpenPrice:  openPrice,
@@ -234,7 +260,7 @@ type OpenPositionAction struct {
 
 // IsValid проверяет, что действие валидно
 func (a *OpenPositionAction) IsValid() bool {
-	return a.Type == Long || a.Type == Short
+	return a.Type.IsValid()
 }
 
 // OpenPositionActionResult результат открытия позиции
