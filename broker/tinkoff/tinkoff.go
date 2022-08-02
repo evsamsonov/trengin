@@ -177,11 +177,11 @@ func (t *Tinkoff) ChangeConditionalOrder(
 	}
 
 	ctx = t.ctxWithMetadata(ctx)
-	if err := t.cancelStopOrder(ctx); err != nil {
-		return trengin.Position{}, err
-	}
-
 	if action.StopLoss != 0 {
+		if err := t.cancelStopOrder(ctx); err != nil {
+			return trengin.Position{}, err
+		}
+
 		stopLossID, err := t.setStopLoss(ctx, t.stopOrderPrice(action.StopLoss), t.currentPosition.position.Type)
 		if err != nil {
 			return trengin.Position{}, err

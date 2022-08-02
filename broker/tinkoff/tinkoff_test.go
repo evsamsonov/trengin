@@ -1,7 +1,7 @@
 package tinkoff
 
 import (
-	context "context"
+	"context"
 	"testing"
 
 	"bou.ke/monkey"
@@ -199,6 +199,142 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 
 			assert.Equal(t, tt.want.stopLossID, tinkoff.currentPosition.StopLossID())
 			assert.Equal(t, tt.want.takeProfitID, tinkoff.currentPosition.TakeProfitID())
+		})
+	}
+}
+
+func TestTinkoff_ChangeConditionalOrder_noOpenPosition(t *testing.T) {
+	tinkoff := &Tinkoff{
+		currentPosition: &currentPosition{},
+	}
+	_, err := tinkoff.ChangeConditionalOrder(context.Background(), trengin.ChangeConditionalOrderAction{})
+	assert.Errorf(t, err, "no open position")
+}
+
+func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
+	type testWant struct {
+		stopLoss           *investapi.Quotation
+		takeProfit         *investapi.Quotation
+		stopOrderDirection investapi.StopOrderDirection
+		stopLossID         string
+		takeProfitID       string
+	}
+
+	tests := []struct {
+		name                       string
+		changeConditionOrderAction trengin.ChangeConditionalOrderAction
+		positionType               trengin.PositionType
+		want                       testWant
+	}{
+		{
+			name: "stop loss and take profit equal zero",
+			changeConditionOrderAction: trengin.ChangeConditionalOrderAction{
+				PositionID: trengin.PositionID{},
+				StopLoss:   0,
+				TakeProfit: 0,
+			},
+		},
+		{
+			name: "long position, stop loss and take profit set are given",
+			changeConditionOrderAction: trengin.ChangeConditionalOrderAction{
+				PositionID: trengin.PositionID{},
+				StopLoss:   123.43,
+				TakeProfit: 156.31,
+			},
+			positionType: trengin.Long,
+			want: testWant{
+				stopLoss: &investapi.Quotation{
+					Units: 123,
+					Nano:  0.43 * 10e8,
+				},
+				takeProfit: &investapi.Quotation{
+					Units: 156,
+					Nano:  0.31 * 10e8,
+				},
+				stopOrderDirection: investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL,
+				stopLossID:         "2",
+				takeProfitID:       "4",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ordersServiceClient := &mockOrdersServiceClient{}
+			stopOrdersServiceClient := &mockStopOrdersServiceClient{}
+
+			tinkoff := &Tinkoff{
+				accountID:       "123",
+				orderClient:     ordersServiceClient,
+				stopOrderClient: stopOrdersServiceClient,
+				instrumentFIGI:  "FUTSBRF06220",
+				tradedQuantity:  2,
+				instrument: &investapi.Instrument{
+					MinPriceIncrement: &investapi.Quotation{
+						Units: 0,
+						Nano:  0.01 * 10e8,
+					},
+				},
+				currentPosition: &currentPosition{
+					position: &trengin.Position{
+						Type: tt.positionType,
+					},
+					stopLossID:   "1",
+					takeProfitID: "3",
+				},
+				logger: zap.NewNop(),
+			}
+
+			if tt.changeConditionOrderAction.StopLoss != 0 {
+				stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
+					AccountId:   "123",
+					StopOrderId: "1",
+				}).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+
+				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
+					Figi:           "FUTSBRF06220",
+					Quantity:       2,
+					StopPrice:      tt.want.stopLoss,
+					Direction:      tt.want.stopOrderDirection,
+					AccountId:      "123",
+					ExpirationType: investapi.StopOrderExpirationType_STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL,
+					StopOrderType:  investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS,
+				}).Return(&investapi.PostStopOrderResponse{
+					StopOrderId: "2",
+				}, nil).Once()
+			}
+
+			if tt.changeConditionOrderAction.TakeProfit != 0 {
+				stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
+					AccountId:   "123",
+					StopOrderId: "3",
+				}).Return(&investapi.PostStopOrderResponse{
+					StopOrderId: "4",
+				}, nil).Once()
+
+				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
+					Figi:           "FUTSBRF06220",
+					Quantity:       2,
+					StopPrice:      tt.want.takeProfit,
+					Direction:      tt.want.stopOrderDirection,
+					AccountId:      "123",
+					ExpirationType: investapi.StopOrderExpirationType_STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL,
+					StopOrderType:  investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS,
+				}).Return(&investapi.PostStopOrderResponse{
+					StopOrderId: "123",
+				}, nil).Once()
+			}
+
+			position, err := tinkoff.ChangeConditionalOrder(context.Background(), trengin.ChangeConditionalOrderAction{
+				PositionID: trengin.PositionID{},
+				StopLoss:   tt.changeConditionOrderAction.StopLoss,
+				TakeProfit: tt.changeConditionOrderAction.TakeProfit,
+			})
+			assert.NoError(t, err)
+			_ = position
+			assert.Equal(t, tt.want.stopLossID, tinkoff.currentPosition.StopLossID())
+			assert.Equal(t, tt.want.takeProfitID, tinkoff.currentPosition.TakeProfitID())
+
 		})
 	}
 }
