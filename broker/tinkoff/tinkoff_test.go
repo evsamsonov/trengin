@@ -357,6 +357,14 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 	}
 }
 
+func TestTinkoff_ClosePosition_noOpenPosition(t *testing.T) {
+	tinkoff := &Tinkoff{
+		currentPosition: &currentPosition{},
+	}
+	_, err := tinkoff.ClosePosition(context.Background(), trengin.ClosePositionAction{})
+	assert.Errorf(t, err, "no open position")
+}
+
 func TestTinkoff_stopLossPriceByOpen(t *testing.T) {
 	tests := []struct {
 		name      string
