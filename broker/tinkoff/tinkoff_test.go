@@ -3,6 +3,7 @@ package tinkoff
 import (
 	"context"
 	"testing"
+	"time"
 
 	"bou.ke/monkey"
 	"github.com/google/uuid"
@@ -363,6 +364,98 @@ func TestTinkoff_ClosePosition_noOpenPosition(t *testing.T) {
 	}
 	_, err := tinkoff.ClosePosition(context.Background(), trengin.ClosePositionAction{})
 	assert.Errorf(t, err, "no open position")
+}
+
+func TestTinkoff_ClosePosition(t *testing.T) {
+	ordersServiceClient := &mockOrdersServiceClient{}
+	stopOrdersServiceClient := &mockStopOrdersServiceClient{}
+
+	tests := []struct {
+		name               string
+		positionType       trengin.PositionType
+		wantOrderDirection investapi.OrderDirection
+		wantClosePrice     *investapi.MoneyValue
+	}{
+		{
+			name:               "long",
+			positionType:       trengin.Long,
+			wantOrderDirection: investapi.OrderDirection_ORDER_DIRECTION_SELL,
+			wantClosePrice: &investapi.MoneyValue{
+				Units: 148,
+				Nano:  0.2 * 10e8,
+			},
+		},
+		{
+			name:               "short",
+			positionType:       trengin.Short,
+			wantOrderDirection: investapi.OrderDirection_ORDER_DIRECTION_BUY,
+			wantClosePrice: &investapi.MoneyValue{
+				Units: 256,
+				Nano:  0.3 * 10e8,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			monkey.Patch(uuid.New, func() uuid.UUID {
+				return uuid.MustParse("8942e9ae-e4e1-11ec-8fea-0242ac120002")
+			})
+
+			pos, err := trengin.NewPosition(
+				trengin.NewOpenPositionAction(tt.positionType, 0, 0),
+				time.Now(),
+				150,
+			)
+			assert.NoError(t, err)
+			tinkoff := &Tinkoff{
+				accountID:       "123",
+				orderClient:     ordersServiceClient,
+				stopOrderClient: stopOrdersServiceClient,
+				instrumentFIGI:  "FUTSBRF06220",
+				tradedQuantity:  2,
+				instrument: &investapi.Instrument{
+					MinPriceIncrement: &investapi.Quotation{
+						Units: 0,
+						Nano:  0.01 * 10e8,
+					},
+				},
+				currentPosition: &currentPosition{
+					position:     pos,
+					stopLossID:   "1",
+					takeProfitID: "3",
+					closed:       make(chan trengin.Position, 1),
+				},
+				logger: zap.NewNop(),
+			}
+
+			stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
+				AccountId:   "123",
+				StopOrderId: "1",
+			}).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+
+			stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
+				AccountId:   "123",
+				StopOrderId: "3",
+			}).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
+
+			ordersServiceClient.On("PostOrder", mock.Anything, &investapi.PostOrderRequest{
+				Figi:      "FUTSBRF06220",
+				Quantity:  2,
+				Direction: tt.wantOrderDirection,
+				AccountId: "123",
+				OrderType: investapi.OrderType_ORDER_TYPE_MARKET,
+				OrderId:   "8942e9ae-e4e1-11ec-8fea-0242ac120002",
+			}).Return(&investapi.PostOrderResponse{
+				ExecutionReportStatus: investapi.OrderExecutionReportStatus_EXECUTION_REPORT_STATUS_FILL,
+				ExecutedOrderPrice:    tt.wantClosePrice,
+			}, nil)
+
+			position, err := tinkoff.ClosePosition(context.Background(), trengin.ClosePositionAction{})
+			assert.NoError(t, err)
+			assert.InEpsilon(t, NewMoneyValue(tt.wantClosePrice).ToFloat(), position.ClosePrice, float64EqualityThreshold)
+		})
+	}
 }
 
 func TestTinkoff_stopLossPriceByOpen(t *testing.T) {

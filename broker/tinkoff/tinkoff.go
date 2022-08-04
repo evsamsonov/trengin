@@ -162,7 +162,7 @@ func (t *Tinkoff) OpenPosition(
 		return trengin.Position{}, nil, fmt.Errorf("new position: %w", err)
 	}
 
-	positionClosed := make(chan trengin.Position)
+	positionClosed := make(chan trengin.Position, 1)
 	t.currentPosition.Set(position, stopLossID, takeProfitID, positionClosed)
 
 	return *position, positionClosed, nil
@@ -206,23 +206,35 @@ func (t *Tinkoff) ChangeConditionalOrder(
 	return *t.currentPosition.Position(), nil
 }
 
-func (t *Tinkoff) ClosePosition(ctx context.Context, action trengin.ClosePositionAction) (trengin.Position, error) {
+func (t *Tinkoff) ClosePosition(ctx context.Context, _ trengin.ClosePositionAction) (trengin.Position, error) {
 	if !t.currentPosition.Exist() {
 		return trengin.Position{}, fmt.Errorf("no open position")
 	}
 
 	ctx = t.ctxWithMetadata(ctx)
 	if err := t.cancelStopOrder(ctx, t.currentPosition.StopLossID()); err != nil {
-		return trengin.Position{}, err
+		return trengin.Position{}, fmt.Errorf("cancel stop loss: %w", err)
 	}
-	// todo снять тейк профит
+	if err := t.cancelStopOrder(ctx, t.currentPosition.TakeProfitID()); err != nil {
+		return trengin.Position{}, fmt.Errorf("cancel take profit: %w", err)
+	}
 
 	position := t.currentPosition.Position()
-	_, err := t.openMarketOrder(ctx, position.Type.Inverse())
+	logger := t.logger.With(zap.Any("position", position))
+
+	closePrice, err := t.openMarketOrder(ctx, position.Type.Inverse())
 	if err != nil {
 		return trengin.Position{}, fmt.Errorf("open market order: %w", err)
 	}
+	if err := t.currentPosition.Close(closePrice.ToFloat()); err != nil {
+		if errors.Is(err, trengin.ErrAlreadyClosed) {
+			logger.Info("Position already closed")
+			return *position, nil
+		}
+		return trengin.Position{}, fmt.Errorf("close: %w", err)
+	}
 
+	logger.Info("Position was closed")
 	return *position, nil
 }
 
@@ -264,13 +276,18 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 	closePrice /= float64(executedQuantity)
 	err := t.currentPosition.Close(closePrice)
 	if err != nil {
-		return fmt.Errorf("close: %w", err)
+		if errors.Is(err, trengin.ErrAlreadyClosed) {
+			t.logger.Info("Position already closed", zap.Any("position", t.currentPosition))
+			return nil
+		} else {
+			return fmt.Errorf("close: %w", err)
+		}
 	}
 
 	t.logger.Info(
-		"Position was closed",
+		"Position was closed by order trades",
 		zap.Any("orderTrades", orderTrades),
-		zap.Float64("closePrice", closePrice),
+		zap.Any("position", t.currentPosition),
 	)
 	return nil
 }
