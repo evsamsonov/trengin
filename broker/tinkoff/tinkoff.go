@@ -178,7 +178,7 @@ func (t *Tinkoff) ChangeConditionalOrder(
 
 	ctx = t.ctxWithMetadata(ctx)
 	if action.StopLoss != 0 {
-		if err := t.cancelStopOrder(ctx); err != nil {
+		if err := t.cancelStopOrder(ctx, t.currentPosition.StopLossID()); err != nil {
 			return trengin.Position{}, err
 		}
 
@@ -191,7 +191,16 @@ func (t *Tinkoff) ChangeConditionalOrder(
 	}
 
 	if action.TakeProfit != 0 {
-		t.logger.Warn("Take profit is not implemented")
+		if err := t.cancelStopOrder(ctx, t.currentPosition.TakeProfitID()); err != nil {
+			return trengin.Position{}, err
+		}
+
+		takeProfitID, err := t.setTakeProfit(ctx, t.stopOrderPrice(action.TakeProfit), t.currentPosition.position.Type)
+		if err != nil {
+			return trengin.Position{}, err
+		}
+		t.currentPosition.SetTakeProfitID(takeProfitID)
+		t.currentPosition.position.TakeProfit = action.TakeProfit
 	}
 
 	return *t.currentPosition.Position(), nil
@@ -203,9 +212,10 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, action trengin.ClosePositio
 	}
 
 	ctx = t.ctxWithMetadata(ctx)
-	if err := t.cancelStopOrder(ctx); err != nil {
+	if err := t.cancelStopOrder(ctx, t.currentPosition.StopLossID()); err != nil {
 		return trengin.Position{}, err
 	}
+	// todo снять тейк профит
 
 	position := t.currentPosition.Position()
 	_, err := t.openMarketOrder(ctx, position.Type.Inverse())
@@ -367,10 +377,13 @@ func (t *Tinkoff) setStopOrder(
 	return stopOrder.StopOrderId, nil
 }
 
-func (t *Tinkoff) cancelStopOrder(ctx context.Context) error {
+func (t *Tinkoff) cancelStopOrder(ctx context.Context, id string) error {
+	if id == "" {
+		return nil
+	}
 	cancelStopOrderRequest := &investapi.CancelStopOrderRequest{
 		AccountId:   t.accountID,
-		StopOrderId: t.currentPosition.StopLossID(),
+		StopOrderId: id,
 	}
 	_, err := t.stopOrderClient.CancelStopOrder(ctx, cancelStopOrderRequest)
 	if err != nil {

@@ -233,6 +233,12 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				StopLoss:   0,
 				TakeProfit: 0,
 			},
+			want: testWant{
+				stopLossID:   "1",
+				takeProfitID: "3",
+				stopLoss:     &investapi.Quotation{},
+				takeProfit:   &investapi.Quotation{},
+			},
 		},
 		{
 			name: "long position, stop loss and take profit set are given",
@@ -308,9 +314,7 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
 					AccountId:   "123",
 					StopOrderId: "3",
-				}).Return(&investapi.PostStopOrderResponse{
-					StopOrderId: "4",
-				}, nil).Once()
+				}).Return(&investapi.CancelStopOrderResponse{}, nil).Once()
 
 				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
 					Figi:           "FUTSBRF06220",
@@ -319,9 +323,9 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 					Direction:      tt.want.stopOrderDirection,
 					AccountId:      "123",
 					ExpirationType: investapi.StopOrderExpirationType_STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL,
-					StopOrderType:  investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS,
+					StopOrderType:  investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT,
 				}).Return(&investapi.PostStopOrderResponse{
-					StopOrderId: "123",
+					StopOrderId: "4",
 				}, nil).Once()
 			}
 
@@ -331,7 +335,21 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				TakeProfit: tt.changeConditionOrderAction.TakeProfit,
 			})
 			assert.NoError(t, err)
-			_ = position
+
+			wantStopLoss := NewMoneyValue(tt.want.stopLoss).ToFloat()
+			if wantStopLoss == 0 {
+				assert.Zero(t, position.StopLoss)
+			} else {
+				assert.InEpsilon(t, NewMoneyValue(tt.want.stopLoss).ToFloat(), position.StopLoss, float64EqualityThreshold)
+			}
+
+			wantTakeProfit := NewMoneyValue(tt.want.takeProfit).ToFloat()
+			if wantTakeProfit == 0 {
+				assert.Zero(t, position.StopLoss)
+			} else {
+				assert.InEpsilon(t, NewMoneyValue(tt.want.takeProfit).ToFloat(), position.TakeProfit, float64EqualityThreshold)
+			}
+
 			assert.Equal(t, tt.want.stopLossID, tinkoff.currentPosition.StopLossID())
 			assert.Equal(t, tt.want.takeProfitID, tinkoff.currentPosition.TakeProfitID())
 
