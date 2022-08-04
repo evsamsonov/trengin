@@ -76,8 +76,7 @@ func (p *currentPosition) Close(closePrice float64) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 
-	err := p.position.Close(time.Now(), closePrice)
-	if err != nil {
+	if err := p.position.Close(time.Now(), closePrice); err != nil {
 		return err
 	}
 
