@@ -57,7 +57,9 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 	conn, err := grpc.Dial(
 		tinkoffHost,
 		grpc.WithTransportCredentials(
-			credentials.NewTLS(&tls.Config{InsecureSkipVerify: true}), //nolint: gosec
+			credentials.NewTLS(&tls.Config{
+				InsecureSkipVerify: true, //nolint: gosec
+			}),
 		),
 		grpc.WithBlock(),
 	)
@@ -114,7 +116,7 @@ func (t *Tinkoff) Run(ctx context.Context) error {
 		case *investapi.TradesStreamResponse_Ping:
 			t.logger.Debug("Trade stream ping was received", zap.Any("ping", v))
 		case *investapi.TradesStreamResponse_OrderTrades:
-			t.logger.Debug("Order trades were received", zap.Any("orderTrades", v))
+			t.logger.Info("Order trades were received", zap.Any("orderTrades", v))
 
 			if err := t.processOrderTrades(v.OrderTrades); err != nil {
 				return fmt.Errorf("process order trades: %w", err)
@@ -131,7 +133,7 @@ func (t *Tinkoff) OpenPosition(
 	action trengin.OpenPositionAction,
 ) (trengin.Position, trengin.PositionClosed, error) {
 	if t.currentPosition.Exist() {
-		return trengin.Position{}, nil, fmt.Errorf("not support multiple open position")
+		return trengin.Position{}, nil, fmt.Errorf("no support multiple open position")
 	}
 
 	ctx = t.ctxWithMetadata(ctx)
@@ -405,6 +407,11 @@ func (t *Tinkoff) cancelStopOrder(ctx context.Context, id string) error {
 		)
 		return fmt.Errorf("cancel stop order: %w", err)
 	}
+
+	t.logger.Info(
+		"Stop order was canceled",
+		zap.String("id", id),
+	)
 	return nil
 }
 
