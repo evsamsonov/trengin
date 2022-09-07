@@ -1,5 +1,3 @@
-//
-//
 // https://tinkoff.github.io/investAPI/
 package tinkoff
 
@@ -248,9 +246,6 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 	if orderTrades.Figi != t.instrumentFIGI {
 		return nil
 	}
-	if orderTrades.Trades[0].Quantity != t.tradedQuantity {
-		return nil
-	}
 
 	longClosed := t.currentPosition.position.Type.IsLong() &&
 		orderTrades.Direction == investapi.OrderDirection_ORDER_DIRECTION_SELL
@@ -265,7 +260,7 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 	for _, trade := range orderTrades.GetTrades() {
 		executedQuantity += trade.GetQuantity()
 		price := NewMoneyValue(trade.Price)
-		closePrice += price.ToFloat() * float64(executedQuantity)
+		closePrice += price.ToFloat() * float64(trade.GetQuantity())
 	}
 
 	if executedQuantity != t.tradedQuantity {
@@ -274,8 +269,7 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 	}
 
 	closePrice /= float64(executedQuantity)
-	err := t.currentPosition.Close(closePrice)
-	if err != nil {
+	if err := t.currentPosition.Close(closePrice); err != nil {
 		if errors.Is(err, trengin.ErrAlreadyClosed) {
 			t.logger.Info("Position already closed", zap.Any("position", t.currentPosition))
 			return nil

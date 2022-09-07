@@ -573,3 +573,73 @@ func TestTinkoff_stopLossPriceByOpen(t *testing.T) {
 		})
 	}
 }
+
+func TestTinkoff_processOrderTrades(t *testing.T) {
+	ordersServiceClient := &mockOrdersServiceClient{}
+	stopOrdersServiceClient := &mockStopOrdersServiceClient{}
+
+	closed := make(chan trengin.Position, 1)
+	pos, err := trengin.NewPosition(
+		trengin.NewOpenPositionAction(trengin.Long, 0, 0),
+		time.Now(),
+		150,
+	)
+	assert.NoError(t, err)
+
+	tinkoff := &Tinkoff{
+		accountID:       "123",
+		orderClient:     ordersServiceClient,
+		stopOrderClient: stopOrdersServiceClient,
+		instrumentFIGI:  "FUTSBRF06220",
+		tradedQuantity:  3,
+		instrument: &investapi.Instrument{
+			MinPriceIncrement: &investapi.Quotation{
+				Units: 0,
+				Nano:  0.01 * 10e8,
+			},
+		},
+		currentPosition: &currentPosition{
+			position:     pos,
+			stopLossID:   "1",
+			takeProfitID: "3",
+			closed:       closed,
+		},
+		logger: zap.NewNop(),
+	}
+
+	ot := &investapi.OrderTrades{
+		OrderId:   "",
+		CreatedAt: nil,
+		Direction: investapi.OrderDirection_ORDER_DIRECTION_SELL,
+		Figi:      "FUTSBRF06220",
+		Trades: []*investapi.OrderTrade{
+			{
+				DateTime: nil,
+				Price: &investapi.Quotation{
+					Units: 112,
+					Nano:  0.3 * 10e8,
+				},
+				Quantity: 2,
+			},
+			{
+				DateTime: nil,
+				Price: &investapi.Quotation{
+					Units: 237,
+					Nano:  0.1 * 10e8,
+				},
+				Quantity: 1,
+			},
+		},
+		AccountId: "123",
+	}
+
+	err = tinkoff.processOrderTrades(ot)
+	assert.NoError(t, err)
+
+	select {
+	case position := <-closed:
+		assert.InEpsilon(t, 153.9, position.ClosePrice, float64EqualityThreshold)
+	default:
+		assert.Fail(t, "Failed to get closed position")
+	}
+}
