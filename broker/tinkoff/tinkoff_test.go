@@ -643,3 +643,53 @@ func TestTinkoff_processOrderTrades(t *testing.T) {
 		assert.Fail(t, "Failed to get closed position")
 	}
 }
+
+func TestTinkoff_addProtectedSpread(t *testing.T) {
+	var tests = []struct {
+		name  string
+		pType trengin.PositionType
+		price *investapi.Quotation
+		want  *investapi.Quotation
+	}{
+		{
+			name:  "long",
+			pType: trengin.Long,
+			price: &investapi.Quotation{
+				Units: 237,
+				Nano:  0.1 * 10e8,
+			},
+			want: &investapi.Quotation{
+				Units: 225,
+				Nano:  0.2 * 10e8,
+			},
+		},
+		{
+			name:  "short",
+			pType: trengin.Short,
+			price: &investapi.Quotation{
+				Units: 237,
+				Nano:  0.1 * 10e8,
+			},
+			want: &investapi.Quotation{
+				Units: 248,
+				Nano:  1 * 10e8,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tinkoff := Tinkoff{
+				protectiveSpread: 5,
+				instrument: &investapi.Instrument{
+					MinPriceIncrement: &investapi.Quotation{
+						Units: 0,
+						Nano:  0.1 * 10e8,
+					},
+				},
+			}
+			result := tinkoff.addProtectedSpread(tt.pType, tt.price)
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
