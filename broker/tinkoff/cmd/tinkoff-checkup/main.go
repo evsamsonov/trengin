@@ -129,7 +129,7 @@ func main() {
 	}
 	logger.Info("Conditional order was changed", zap.Any("position", position))
 
-	fmt.Println("Press any key for ")
+	fmt.Println("Press any key for close position")
 	_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 
 	closePositionAction := trengin.ClosePositionAction{

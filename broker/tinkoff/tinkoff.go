@@ -128,7 +128,7 @@ func (t *Tinkoff) Run(ctx context.Context) error {
 		case *investapi.TradesStreamResponse_OrderTrades:
 			t.logger.Info("Order trades were received", zap.Any("orderTrades", v))
 
-			if err := t.processOrderTrades(v.OrderTrades); err != nil {
+			if err := t.processOrderTrades(ctx, v.OrderTrades); err != nil {
 				return fmt.Errorf("process order trades: %w", err)
 			}
 		default:
@@ -248,7 +248,7 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, _ trengin.ClosePositionActi
 	return *position, nil
 }
 
-func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
+func (t *Tinkoff) processOrderTrades(ctx context.Context, orderTrades *investapi.OrderTrades) error {
 	if !t.currentPosition.Exist() {
 		return nil
 	}
@@ -275,9 +275,14 @@ func (t *Tinkoff) processOrderTrades(orderTrades *investapi.OrderTrades) error {
 		closePrice += price.ToFloat() * float64(trade.GetQuantity())
 	}
 
-	if executedQuantity != t.tradedQuantity {
+	if executedQuantity != t.tradedQuantity*int64(t.instrument.Lot) {
 		t.logger.Warn("Position was closed partially", zap.Int64("executedQuantity", executedQuantity))
 		return nil
+	}
+
+	err := t.cancelStopOrders(ctx)
+	if err != nil {
+		return err
 	}
 
 	closePrice /= float64(executedQuantity)
@@ -373,7 +378,7 @@ func (t *Tinkoff) setStopOrder(
 		reqStopOrderType = investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT
 	}
 
-	price := t.addProtectedSpread(positionType.Inverse(), stopPrice)
+	price := t.addProtectedSpread(positionType, stopPrice)
 	stopOrderRequest := &investapi.PostStopOrderRequest{
 		Figi:           t.instrumentFIGI,
 		Quantity:       t.tradedQuantity,
@@ -461,4 +466,33 @@ func (t *Tinkoff) addProtectedSpread(
 	return t.convertFloatToQuotation(
 		priceFloat - positionType.Multiplier()*protectiveSpread,
 	)
+}
+
+func (t *Tinkoff) cancelStopOrders(ctx context.Context) error {
+	ctx = t.ctxWithMetadata(ctx)
+
+	resp, err := t.stopOrderClient.GetStopOrders(ctx, &investapi.GetStopOrdersRequest{
+		AccountId: t.accountID,
+	})
+	if err != nil {
+		return err
+	}
+
+	orders := make(map[string]struct{})
+	for _, order := range resp.StopOrders {
+		orders[order.StopOrderId] = struct{}{}
+	}
+
+	stopLossID := t.currentPosition.StopLossID()
+	if _, ok := orders[stopLossID]; ok {
+		if err := t.cancelStopOrder(ctx, stopLossID); err != nil {
+			return fmt.Errorf("cancel stop loss: %w", err)
+		}
+	}
+	if _, ok := orders[t.currentPosition.TakeProfitID()]; ok {
+		if err := t.cancelStopOrder(ctx, t.currentPosition.TakeProfitID()); err != nil {
+			return fmt.Errorf("cancel take profit: %w", err)
+		}
+	}
+	return nil
 }
