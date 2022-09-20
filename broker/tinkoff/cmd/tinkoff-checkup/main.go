@@ -33,11 +33,6 @@ func main() {
 		log.Fatalf("Failed to create logger: %s", err)
 		return
 	}
-	defer func() {
-		if err := logger.Sync(); err != nil {
-			log.Fatalf("Failed to sync logger: %s", err)
-		}
-	}()
 
 	fmt.Printf("Paste Tinkoff token: ")
 	tokenBytes, err := term.ReadPassword(int(syscall.Stdin))

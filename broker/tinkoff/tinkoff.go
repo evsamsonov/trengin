@@ -10,12 +10,15 @@ import (
 	"math"
 	"time"
 
+	"google.golang.org/grpc/codes"
+
 	"github.com/google/uuid"
 	investapi "github.com/tinkoff/invest-api-go-sdk"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/evsamsonov/trengin"
 )
@@ -117,6 +120,9 @@ func (t *Tinkoff) Run(ctx context.Context) error {
 		if err != nil {
 			if err == io.EOF {
 				t.logger.Info("Trade stream connection is closed")
+				break
+			}
+			if status.Code(err) == codes.Canceled {
 				break
 			}
 			return fmt.Errorf("stream recv: %w", err)
