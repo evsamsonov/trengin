@@ -86,21 +86,17 @@ func (p PositionID) String() string {
 //go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Strategy --inpackage --case snake
 
 // Strategy описывает интерфейс торговой стратегии. Позволяет реализовать стратегию,
-// взаимодействуя с Engine через каналы, которые возвращают методы Actions и Errors.
-// Actions используется для отправки торговых действий, Errors для оповещения
-// о критической ошибке. Есть закрыть любой из каналов или отправить значение
-// в канал ошибок, то Engine завершит свою работу
+// взаимодействуя с Engine через канал, которые возвращает метод Actions.
+// Actions используется для отправки торговых действий. Есть закрыть канал Actions,
+// то Engine завершит свою работу
 type Strategy interface {
 	// Run запускает стратегию в работу
-	Run(ctx context.Context)
+	Run(ctx context.Context) error
 
 	// Actions возвращает канал для получения торговых действий. При закрытии
 	// канала Engine завершит работу.
 	Actions() Actions
-
-	// Errors возвращает канал для получения ошибок. При получении сообщения
-	// из канала или на его закрытие Engine завершит работу.
-	Errors() <-chan error
+	// todo изменить readme
 }
 
 // Actions это канал для передачи торговых действий от Strategy к Broker
@@ -406,8 +402,6 @@ func (e *Engine) run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case err := <-e.strategy.Errors():
-			return err
 		case action, ok := <-e.strategy.Actions():
 			if !ok {
 				return nil
