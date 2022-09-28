@@ -109,6 +109,8 @@ type Actions <-chan interface{}
 // Broker описывает интерфейс клиента, исполняющего торговые операции
 // и отслеживающего статус условных заявок по позициям.
 type Broker interface {
+	Run(ctx context.Context) error
+
 	// OpenPosition открывает позицию и запускает отслеживание условной заявки
 	// Возвращает открытую позицию, и канал PositionClosed, в который будет отправлена
 	// позиция при закрытии.
@@ -379,18 +381,34 @@ func New(strategy Strategy, broker Broker) *Engine {
 
 // Run запускает стратегию в работу
 func (e *Engine) Run(ctx context.Context) (err error) {
+	var errOnce sync.Once
+	setError := func(e error) {
+		if e == nil {
+			return
+		}
+		errOnce.Do(func() {
+			err = e
+		})
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	e.waitGroup.Add(2)
 	go func() {
 		defer e.waitGroup.Done()
 		defer cancel()
-		e.strategy.Run(ctx)
+		setError(e.strategy.Run(ctx))
 	}()
 
 	go func() {
 		defer e.waitGroup.Done()
 		defer cancel()
-		err = e.run(ctx)
+		setError(e.strategy.Run(ctx))
+	}()
+
+	go func() {
+		defer e.waitGroup.Done()
+		defer cancel()
+		setError(e.run(ctx))
 	}()
 
 	e.waitGroup.Wait()
