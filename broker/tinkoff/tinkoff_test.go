@@ -633,7 +633,7 @@ func TestTinkoff_processOrderTrades(t *testing.T) {
 		AccountId: "123",
 	}
 
-	err = tinkoff.processOrderTrades(ot)
+	err = tinkoff.processOrderTrades(context.Background(), ot)
 	assert.NoError(t, err)
 
 	select {

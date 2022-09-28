@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/google/uuid"
 )
 
@@ -367,7 +369,6 @@ type Engine struct {
 	onPositionClosed          func(position Position)
 	onConditionalOrderChanged func(position Position)
 	sendResultTimeout         time.Duration
-	waitGroup                 sync.WaitGroup
 }
 
 // New создает экземпляр Engine и возвращает указатель на него
@@ -380,42 +381,25 @@ func New(strategy Strategy, broker Broker) *Engine {
 }
 
 // Run запускает стратегию в работу
-func (e *Engine) Run(ctx context.Context) (err error) {
-	var errOnce sync.Once
-	setError := func(e error) {
-		if e == nil {
-			return
-		}
-		errOnce.Do(func() {
-			err = e
-		})
-	}
+func (e *Engine) Run(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
 
-	ctx, cancel := context.WithCancel(ctx)
-	e.waitGroup.Add(2)
-	go func() {
-		defer e.waitGroup.Done()
-		defer cancel()
-		setError(e.strategy.Run(ctx))
-	}()
+	g.Go(func() error {
+		return e.broker.Run(ctx)
+	})
 
-	go func() {
-		defer e.waitGroup.Done()
-		defer cancel()
-		setError(e.strategy.Run(ctx))
-	}()
+	g.Go(func() error {
+		return e.strategy.Run(ctx)
+	})
 
-	go func() {
-		defer e.waitGroup.Done()
-		defer cancel()
-		setError(e.run(ctx))
-	}()
+	g.Go(func() error {
+		return e.run(ctx, g)
+	})
 
-	e.waitGroup.Wait()
-	return
+	return g.Wait()
 }
 
-func (e *Engine) run(ctx context.Context) error {
+func (e *Engine) run(ctx context.Context, g *errgroup.Group) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -426,7 +410,7 @@ func (e *Engine) run(ctx context.Context) error {
 			}
 			switch action := action.(type) {
 			case OpenPositionAction:
-				if err := e.doOpenPosition(ctx, action); err != nil {
+				if err := e.doOpenPosition(ctx, g, action); err != nil {
 					return err
 				}
 			case ClosePositionAction:
@@ -477,9 +461,9 @@ func (e *Engine) OnPositionClosed(f func(position Position)) *Engine {
 	return e
 }
 
-func (e *Engine) doOpenPosition(ctx context.Context, action OpenPositionAction) error {
+func (e *Engine) doOpenPosition(ctx context.Context, g *errgroup.Group, action OpenPositionAction) error {
 	position, closed, err := e.broker.OpenPosition(ctx, action)
-	closed1, closed2 := e.teePositionClosed(ctx.Done(), closed)
+	closed1, closed2 := e.teePositionClosed(ctx.Done(), g, closed)
 	select {
 	case <-ctx.Done():
 		return nil
@@ -492,22 +476,20 @@ func (e *Engine) doOpenPosition(ctx context.Context, action OpenPositionAction) 
 	}:
 	}
 
-	e.waitGroup.Add(1)
-	go func() {
-		defer e.waitGroup.Done()
+	g.Go(func() error {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		case position, ok := <-closed2:
 			if !ok {
-				return
+				return nil
 			}
 			if e.onPositionClosed != nil {
 				e.onPositionClosed(position)
 			}
-			return
+			return nil
 		}
-	}()
+	})
 
 	if e.onPositionOpened != nil {
 		e.onPositionOpened(position)
@@ -551,22 +533,20 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 	return nil
 }
 
-func (e *Engine) teePositionClosed(done <-chan struct{}, in PositionClosed) (PositionClosed, PositionClosed) {
+func (e *Engine) teePositionClosed(done <-chan struct{}, g *errgroup.Group, in PositionClosed) (PositionClosed, PositionClosed) {
 	out1 := make(chan Position)
 	out2 := make(chan Position)
 
-	e.waitGroup.Add(1)
-	go func() {
-		defer e.waitGroup.Done()
+	g.Go(func() error {
 		defer close(out1)
 		defer close(out2)
 		for {
 			select {
 			case <-done:
-				return
+				return nil
 			case val, ok := <-in:
 				if !ok {
-					return
+					return nil
 				}
 				var out1, out2 = out1, out2
 				for i := 0; i < 2; i++ {
@@ -580,6 +560,6 @@ func (e *Engine) teePositionClosed(done <-chan struct{}, in PositionClosed) (Pos
 				}
 			}
 		}
-	}()
+	})
 	return out1, out2
 }
