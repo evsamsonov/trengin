@@ -382,17 +382,21 @@ func New(strategy Strategy, broker Broker) *Engine {
 
 // Run запускает стратегию в работу
 func (e *Engine) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
+		defer cancel()
 		return e.broker.Run(ctx)
 	})
 
 	g.Go(func() error {
+		defer cancel()
 		return e.strategy.Run(ctx)
 	})
 
 	g.Go(func() error {
+		defer cancel()
 		return e.run(ctx, g)
 	})
 
