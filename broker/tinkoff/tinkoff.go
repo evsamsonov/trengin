@@ -122,6 +122,7 @@ func (t *Tinkoff) Run(ctx context.Context) error {
 				break
 			}
 			if status.Code(err) == codes.Canceled {
+				t.logger.Info("Trade stream connection is canceled")
 				break
 			}
 			return fmt.Errorf("stream recv: %w", err)
