@@ -109,7 +109,7 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 
 func (t *Tinkoff) Run(ctx context.Context) error {
 	readOrderStream := func() error {
-		return t.readOrderStream(ctx)
+		return t.readTradesStream(ctx)
 	}
 	err := backoff.Retry(readOrderStream, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
 	if err != nil {
@@ -228,7 +228,7 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, _ trengin.ClosePositionActi
 	return *position, nil
 }
 
-func (t *Tinkoff) readOrderStream(ctx context.Context) error {
+func (t *Tinkoff) readTradesStream(ctx context.Context) error {
 	ctx = t.ctxWithMetadata(ctx)
 	stream, err := t.orderStreamClient.TradesStream(ctx, &investapi.TradesStreamRequest{})
 	if err != nil {
@@ -238,11 +238,11 @@ func (t *Tinkoff) readOrderStream(ctx context.Context) error {
 		resp, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
-				t.logger.Info("Trade stream connection is closed")
+				t.logger.Info("Trades stream connection is closed")
 				break
 			}
 			if status.Code(err) == codes.Canceled {
-				t.logger.Info("Trade stream connection is canceled")
+				t.logger.Info("Trades stream connection is canceled")
 				break
 			}
 			return fmt.Errorf("stream recv: %w", err)
