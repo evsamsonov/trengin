@@ -10,6 +10,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/google/uuid"
 	investapi "github.com/tinkoff/invest-api-go-sdk"
 	"go.uber.org/zap"
@@ -107,39 +108,12 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 }
 
 func (t *Tinkoff) Run(ctx context.Context) error {
-	ctx = t.ctxWithMetadata(ctx)
-
-	stream, err := t.orderStreamClient.TradesStream(ctx, &investapi.TradesStreamRequest{})
-	if err != nil {
-		return fmt.Errorf("trades stream: %w", err)
+	readOrderStream := func() error {
+		return t.readOrderStream(ctx)
 	}
-
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				t.logger.Info("Trade stream connection is closed")
-				break
-			}
-			if status.Code(err) == codes.Canceled {
-				t.logger.Info("Trade stream connection is canceled")
-				break
-			}
-			return fmt.Errorf("stream recv: %w", err)
-		}
-
-		switch v := resp.Payload.(type) {
-		case *investapi.TradesStreamResponse_Ping:
-			t.logger.Debug("Trade stream ping was received", zap.Any("ping", v))
-		case *investapi.TradesStreamResponse_OrderTrades:
-			t.logger.Info("Order trades were received", zap.Any("orderTrades", v))
-
-			if err := t.processOrderTrades(ctx, v.OrderTrades); err != nil {
-				return fmt.Errorf("process order trades: %w", err)
-			}
-		default:
-			return errors.New("unexpected payload")
-		}
+	err := backoff.Retry(readOrderStream, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
+	if err != nil {
+		return fmt.Errorf("retry: %w", err)
 	}
 	return nil
 }
@@ -252,6 +226,42 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, _ trengin.ClosePositionActi
 
 	logger.Info("Position was closed")
 	return *position, nil
+}
+
+func (t *Tinkoff) readOrderStream(ctx context.Context) error {
+	ctx = t.ctxWithMetadata(ctx)
+	stream, err := t.orderStreamClient.TradesStream(ctx, &investapi.TradesStreamRequest{})
+	if err != nil {
+		return fmt.Errorf("trades stream: %w", err)
+	}
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				t.logger.Info("Trade stream connection is closed")
+				break
+			}
+			if status.Code(err) == codes.Canceled {
+				t.logger.Info("Trade stream connection is canceled")
+				break
+			}
+			return fmt.Errorf("stream recv: %w", err)
+		}
+
+		switch v := resp.Payload.(type) {
+		case *investapi.TradesStreamResponse_Ping:
+			t.logger.Debug("Trade stream ping was received", zap.Any("ping", v))
+		case *investapi.TradesStreamResponse_OrderTrades:
+			t.logger.Info("Order trades were received", zap.Any("orderTrades", v))
+
+			if err := t.processOrderTrades(ctx, v.OrderTrades); err != nil {
+				return fmt.Errorf("process order trades: %w", err)
+			}
+		default:
+			return errors.New("unexpected payload")
+		}
+	}
+	return nil
 }
 
 func (t *Tinkoff) processOrderTrades(ctx context.Context, orderTrades *investapi.OrderTrades) error {

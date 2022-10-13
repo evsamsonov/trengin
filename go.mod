@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	bou.ke/monkey v1.0.2
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/stretchr/testify v1.7.0
 	github.com/tinkoff/invest-api-go-sdk v1.0.2
