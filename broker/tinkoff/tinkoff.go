@@ -23,6 +23,8 @@ import (
 	"github.com/evsamsonov/trengin"
 )
 
+var _ trengin.Broker = &Tinkoff{}
+
 const (
 	tinkoffHost             = "invest-public-api.tinkoff.ru:443"
 	defaultProtectiveSpread = 5
