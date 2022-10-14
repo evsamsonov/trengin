@@ -479,6 +479,9 @@ func (e *Engine) doOpenPosition(ctx context.Context, g *errgroup.Group, action O
 		error:    err,
 	}:
 	}
+	if err != nil {
+		return nil
+	}
 
 	g.Go(func() error {
 		select {
@@ -529,6 +532,9 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 		Position: position,
 		error:    err,
 	}:
+	}
+	if err != nil {
+		return nil
 	}
 
 	if e.onConditionalOrderChanged != nil {
