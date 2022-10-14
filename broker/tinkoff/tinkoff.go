@@ -113,7 +113,9 @@ func (t *Tinkoff) Run(ctx context.Context) error {
 	readOrderStream := func() error {
 		return t.readTradesStream(ctx)
 	}
-	err := backoff.Retry(readOrderStream, backoff.WithContext(backoff.NewExponentialBackOff(), ctx))
+	err := backoff.RetryNotify(readOrderStream, backoff.WithContext(backoff.NewExponentialBackOff(), ctx), func(err error, duration time.Duration) {
+		t.logger.Warn("Retry read trades stream", zap.Error(err), zap.Duration("duration", duration))
+	})
 	if err != nil {
 		return fmt.Errorf("retry: %w", err)
 	}
@@ -231,6 +233,9 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, _ trengin.ClosePositionActi
 }
 
 func (t *Tinkoff) readTradesStream(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	ctx = t.ctxWithMetadata(ctx)
 	stream, err := t.orderStreamClient.TradesStream(ctx, &investapi.TradesStreamRequest{})
 	if err != nil {
