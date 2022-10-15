@@ -10,7 +10,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 	investapi "github.com/tinkoff/invest-api-go-sdk"
 	"go.uber.org/zap"
