@@ -113,9 +113,14 @@ func (t *Tinkoff) Run(ctx context.Context) error {
 	readOrderStream := func() error {
 		return t.readTradesStream(ctx)
 	}
-	err := backoff.RetryNotify(readOrderStream, backoff.WithContext(backoff.NewExponentialBackOff(), ctx), func(err error, duration time.Duration) {
-		t.logger.Warn("Retry read trades stream", zap.Error(err), zap.Duration("duration", duration))
-	})
+	exponentialBackOff := backoff.NewExponentialBackOff()
+	exponentialBackOff.MaxElapsedTime = 0
+	err := backoff.RetryNotify(
+		readOrderStream,
+		backoff.WithContext(exponentialBackOff, ctx),
+		func(err error, duration time.Duration) {
+			t.logger.Warn("Retry read trades stream", zap.Error(err), zap.Duration("duration", duration))
+		})
 	if err != nil {
 		return fmt.Errorf("retry: %w", err)
 	}
