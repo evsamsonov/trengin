@@ -13,7 +13,8 @@ import (
 func Test_currentPosition_Close(t *testing.T) {
 	pos, err := trengin.NewPosition(
 		trengin.OpenPositionAction{
-			Type: trengin.Long,
+			Type:     trengin.Long,
+			Quantity: 2,
 		},
 		time.Now(),
 		1,

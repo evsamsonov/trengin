@@ -133,12 +133,14 @@ type PositionClosed <-chan Position
 type Position struct {
 	ID         PositionID
 	Type       PositionType
+	Quantity   int64
 	OpenTime   time.Time
 	OpenPrice  float64
 	CloseTime  time.Time
 	ClosePrice float64
 	StopLoss   float64
 	TakeProfit float64
+
 	extraMtx   *sync.RWMutex
 	extra      map[interface{}]interface{}
 	closedOnce *sync.Once
@@ -161,6 +163,7 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 	return &Position{
 		ID:         NewPositionID(),
 		Type:       action.Type,
+		Quantity:   action.Quantity,
 		OpenTime:   openTime,
 		OpenPrice:  openPrice,
 		StopLoss:   stopLoss,
@@ -247,7 +250,8 @@ func (p *Position) RangeExtra(f func(key interface{}, val interface{})) {
 // OpenPositionAction описывает действие по открытию позиции с типом Type и отступами
 // условной заявки StopLossIndent и TakeProfitIndent
 type OpenPositionAction struct {
-	Type PositionType
+	Type     PositionType
+	Quantity int64
 
 	// Отступ стоп-лосса от цены открытия. Если равен 0, то стоп-лосс не должен использоваться
 	StopLossIndent float64
@@ -260,7 +264,7 @@ type OpenPositionAction struct {
 
 // IsValid проверяет, что действие валидно
 func (a *OpenPositionAction) IsValid() bool {
-	return a.Type.IsValid()
+	return a.Type.IsValid() && a.Quantity > 0
 }
 
 // OpenPositionActionResult результат открытия позиции
@@ -274,9 +278,15 @@ type OpenPositionActionResult struct {
 // отступом стоп-лосса от цены открытия stopLossIndent и отступом тейк-профита
 // от цены открытия takeProfitIndent. Если стоп-лосс или тейк-профит не требуются,
 // то соответствующие значения отступов должны быть равны 0.
-func NewOpenPositionAction(positionType PositionType, stopLossIndent, takeProfitIndent float64) OpenPositionAction {
+func NewOpenPositionAction(
+	positionType PositionType,
+	quantity int64,
+	stopLossIndent,
+	takeProfitIndent float64,
+) OpenPositionAction {
 	return OpenPositionAction{
 		Type:             positionType,
+		Quantity:         quantity,
 		StopLossIndent:   stopLossIndent,
 		TakeProfitIndent: takeProfitIndent,
 		result:           make(chan OpenPositionActionResult),

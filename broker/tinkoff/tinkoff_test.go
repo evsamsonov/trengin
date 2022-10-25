@@ -40,6 +40,7 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 			name: "long with stop loss and take profit",
 			openPositionAction: trengin.OpenPositionAction{
 				Type:             trengin.Long,
+				Quantity:         2,
 				StopLossIndent:   11.5,
 				TakeProfitIndent: 20.1,
 			},
@@ -67,6 +68,7 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 			name: "short with stop loss and take profit",
 			openPositionAction: trengin.OpenPositionAction{
 				Type:             trengin.Short,
+				Quantity:         2,
 				StopLossIndent:   11.5,
 				TakeProfitIndent: 20.1,
 			},
@@ -94,6 +96,7 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 			name: "without stop loss and take profit",
 			openPositionAction: trengin.OpenPositionAction{
 				Type:             trengin.Long,
+				Quantity:         2,
 				StopLossIndent:   0.0,
 				TakeProfitIndent: 0.0,
 			},
@@ -127,7 +130,6 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 				orderClient:     ordersServiceClient,
 				stopOrderClient: stopOrdersServiceClient,
 				instrumentFIGI:  "FUTSBRF06220",
-				tradedQuantity:  2,
 				instrument: &investapi.Instrument{
 					MinPriceIncrement: &investapi.Quotation{
 						Units: 0,
@@ -154,6 +156,7 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
 					Figi:           "FUTSBRF06220",
 					Quantity:       2,
+					Price:          tt.want.stopLoss,
 					StopPrice:      tt.want.stopLoss,
 					Direction:      tt.want.stopOrderDirection,
 					AccountId:      "123",
@@ -168,6 +171,7 @@ func TestTinkoff_OpenPosition(t *testing.T) {
 				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
 					Figi:           "FUTSBRF06220",
 					Quantity:       2,
+					Price:          tt.want.takeProfit,
 					StopPrice:      tt.want.takeProfit,
 					Direction:      tt.want.stopOrderDirection,
 					AccountId:      "123",
@@ -275,7 +279,6 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				orderClient:     ordersServiceClient,
 				stopOrderClient: stopOrdersServiceClient,
 				instrumentFIGI:  "FUTSBRF06220",
-				tradedQuantity:  2,
 				instrument: &investapi.Instrument{
 					MinPriceIncrement: &investapi.Quotation{
 						Units: 0,
@@ -284,7 +287,8 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				},
 				currentPosition: &currentPosition{
 					position: &trengin.Position{
-						Type: tt.positionType,
+						Type:     tt.positionType,
+						Quantity: 2,
 					},
 					stopLossID:   "1",
 					takeProfitID: "3",
@@ -301,6 +305,7 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
 					Figi:           "FUTSBRF06220",
 					Quantity:       2,
+					Price:          tt.want.stopLoss,
 					StopPrice:      tt.want.stopLoss,
 					Direction:      tt.want.stopOrderDirection,
 					AccountId:      "123",
@@ -320,6 +325,7 @@ func TestTinkoff_ChangeConditionalOrder(t *testing.T) {
 				stopOrdersServiceClient.On("PostStopOrder", mock.Anything, &investapi.PostStopOrderRequest{
 					Figi:           "FUTSBRF06220",
 					Quantity:       2,
+					Price:          tt.want.takeProfit,
 					StopPrice:      tt.want.takeProfit,
 					Direction:      tt.want.stopOrderDirection,
 					AccountId:      "123",
@@ -403,7 +409,7 @@ func TestTinkoff_ClosePosition(t *testing.T) {
 			})
 
 			pos, err := trengin.NewPosition(
-				trengin.NewOpenPositionAction(tt.positionType, 0, 0),
+				trengin.NewOpenPositionAction(tt.positionType, 2, 0, 0),
 				time.Now(),
 				150,
 			)
@@ -413,7 +419,6 @@ func TestTinkoff_ClosePosition(t *testing.T) {
 				orderClient:     ordersServiceClient,
 				stopOrderClient: stopOrdersServiceClient,
 				instrumentFIGI:  "FUTSBRF06220",
-				tradedQuantity:  2,
 				instrument: &investapi.Instrument{
 					MinPriceIncrement: &investapi.Quotation{
 						Units: 0,
@@ -580,7 +585,7 @@ func TestTinkoff_processOrderTrades(t *testing.T) {
 
 	closed := make(chan trengin.Position, 1)
 	pos, err := trengin.NewPosition(
-		trengin.NewOpenPositionAction(trengin.Long, 0, 0),
+		trengin.NewOpenPositionAction(trengin.Long, 3, 0, 0),
 		time.Now(),
 		150,
 	)
@@ -591,12 +596,12 @@ func TestTinkoff_processOrderTrades(t *testing.T) {
 		orderClient:     ordersServiceClient,
 		stopOrderClient: stopOrdersServiceClient,
 		instrumentFIGI:  "FUTSBRF06220",
-		tradedQuantity:  3,
 		instrument: &investapi.Instrument{
 			MinPriceIncrement: &investapi.Quotation{
 				Units: 0,
 				Nano:  0.01 * 10e8,
 			},
+			Lot: 1,
 		},
 		currentPosition: &currentPosition{
 			position:     pos,

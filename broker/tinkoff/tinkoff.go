@@ -39,7 +39,6 @@ type Tinkoff struct {
 	orderStreamClient investapi.OrdersStreamServiceClient
 	instrumentFIGI    string
 	instrument        *investapi.Instrument
-	tradedQuantity    int64
 	protectiveSpread  float64
 	currentPosition   *currentPosition
 	logger            *zap.Logger
@@ -65,7 +64,7 @@ func WithProtectiveSpread(protectiveSpread float64) Option {
 	}
 }
 
-func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...Option) (*Tinkoff, error) {
+func New(token, accountID, instrumentFIGI string, opts ...Option) (*Tinkoff, error) {
 	conn, err := grpc.Dial(
 		tinkoffHost,
 		grpc.WithTransportCredentials(
@@ -83,7 +82,6 @@ func New(token, accountID, instrumentFIGI string, tradedQuantity int64, opts ...
 		accountID:         accountID,
 		token:             token,
 		instrumentFIGI:    instrumentFIGI,
-		tradedQuantity:    tradedQuantity,
 		protectiveSpread:  defaultProtectiveSpread,
 		orderClient:       investapi.NewOrdersServiceClient(conn),
 		stopOrderClient:   investapi.NewStopOrdersServiceClient(conn),
@@ -136,29 +134,29 @@ func (t *Tinkoff) OpenPosition(
 	}
 
 	ctx = t.ctxWithMetadata(ctx)
-	openPrice, err := t.openMarketOrder(ctx, action.Type)
+	openPrice, err := t.openMarketOrder(ctx, action.Type, action.Quantity)
 	if err != nil {
 		return trengin.Position{}, nil, fmt.Errorf("open market order: %w", err)
 	}
 
+	position, err := trengin.NewPosition(action, time.Now(), openPrice.ToFloat())
+	if err != nil {
+		return trengin.Position{}, nil, fmt.Errorf("new position: %w", err)
+	}
+
 	var stopLossID, takeProfitID string
 	if action.StopLossIndent != 0 {
-		stopLossID, err = t.setStopLoss(ctx, t.stopLossPriceByOpen(openPrice, action), action.Type)
+		stopLossID, err = t.setStopLoss(ctx, t.stopLossPriceByOpen(openPrice, action), *position)
 		if err != nil {
 			return trengin.Position{}, nil, fmt.Errorf("set stop order: %w", err)
 		}
 	}
 
 	if action.TakeProfitIndent != 0 {
-		takeProfitID, err = t.setTakeProfit(ctx, t.takeProfitPriceByOpen(openPrice, action), action.Type)
+		takeProfitID, err = t.setTakeProfit(ctx, t.takeProfitPriceByOpen(openPrice, action), *position)
 		if err != nil {
 			return trengin.Position{}, nil, fmt.Errorf("set stop order: %w", err)
 		}
-	}
-
-	position, err := trengin.NewPosition(action, time.Now(), openPrice.ToFloat())
-	if err != nil {
-		return trengin.Position{}, nil, fmt.Errorf("new position: %w", err)
 	}
 
 	positionClosed := make(chan trengin.Position, 1)
@@ -181,7 +179,11 @@ func (t *Tinkoff) ChangeConditionalOrder(
 			return trengin.Position{}, err
 		}
 
-		stopLossID, err := t.setStopLoss(ctx, t.convertFloatToQuotation(action.StopLoss), t.currentPosition.position.Type)
+		stopLossID, err := t.setStopLoss(
+			ctx,
+			t.convertFloatToQuotation(action.StopLoss),
+			*t.currentPosition.position,
+		)
 		if err != nil {
 			return trengin.Position{}, err
 		}
@@ -194,7 +196,11 @@ func (t *Tinkoff) ChangeConditionalOrder(
 			return trengin.Position{}, err
 		}
 
-		takeProfitID, err := t.setTakeProfit(ctx, t.convertFloatToQuotation(action.TakeProfit), t.currentPosition.position.Type)
+		takeProfitID, err := t.setTakeProfit(
+			ctx,
+			t.convertFloatToQuotation(action.TakeProfit),
+			*t.currentPosition.position,
+		)
 		if err != nil {
 			return trengin.Position{}, err
 		}
@@ -221,7 +227,7 @@ func (t *Tinkoff) ClosePosition(ctx context.Context, _ trengin.ClosePositionActi
 	position := t.currentPosition.Position()
 	logger := t.logger.With(zap.Any("position", position))
 
-	closePrice, err := t.openMarketOrder(ctx, position.Type.Inverse())
+	closePrice, err := t.openMarketOrder(ctx, position.Type.Inverse(), position.Quantity)
 	if err != nil {
 		return trengin.Position{}, fmt.Errorf("open market order: %w", err)
 	}
@@ -303,13 +309,12 @@ func (t *Tinkoff) processOrderTrades(ctx context.Context, orderTrades *investapi
 		closePrice += price.ToFloat() * float64(trade.GetQuantity())
 	}
 
-	if executedQuantity != t.tradedQuantity*int64(t.instrument.Lot) {
+	if executedQuantity != t.currentPosition.position.Quantity*int64(t.instrument.Lot) {
 		t.logger.Warn("Position was closed partially", zap.Int64("executedQuantity", executedQuantity))
 		return nil
 	}
 
-	err := t.cancelStopOrders(ctx)
-	if err != nil {
+	if err := t.cancelStopOrders(ctx); err != nil {
 		return err
 	}
 
@@ -339,14 +344,18 @@ func (t *Tinkoff) ctxWithMetadata(ctx context.Context) context.Context {
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
-func (t *Tinkoff) openMarketOrder(ctx context.Context, positionType trengin.PositionType) (*MoneyValue, error) {
+func (t *Tinkoff) openMarketOrder(
+	ctx context.Context,
+	positionType trengin.PositionType,
+	quantity int64,
+) (*MoneyValue, error) {
 	direction := investapi.OrderDirection_ORDER_DIRECTION_BUY
 	if positionType.IsShort() {
 		direction = investapi.OrderDirection_ORDER_DIRECTION_SELL
 	}
 	orderRequest := &investapi.PostOrderRequest{
 		Figi:      t.instrumentFIGI,
-		Quantity:  t.tradedQuantity,
+		Quantity:  quantity,
 		Direction: direction,
 		AccountId: t.accountID,
 		OrderType: investapi.OrderType_ORDER_TYPE_MARKET,
@@ -378,27 +387,27 @@ const (
 func (t *Tinkoff) setStopLoss(
 	ctx context.Context,
 	price *investapi.Quotation,
-	positionType trengin.PositionType,
+	position trengin.Position,
 ) (string, error) {
-	return t.setStopOrder(ctx, price, positionType, stopLossStopOrderType)
+	return t.setStopOrder(ctx, price, position, stopLossStopOrderType)
 }
 
 func (t *Tinkoff) setTakeProfit(
 	ctx context.Context,
 	price *investapi.Quotation,
-	positionType trengin.PositionType,
+	position trengin.Position,
 ) (string, error) {
-	return t.setStopOrder(ctx, price, positionType, takeProfitStopOrderType)
+	return t.setStopOrder(ctx, price, position, takeProfitStopOrderType)
 }
 
 func (t *Tinkoff) setStopOrder(
 	ctx context.Context,
 	stopPrice *investapi.Quotation,
-	positionType trengin.PositionType,
+	position trengin.Position,
 	orderType stopOrderType,
 ) (string, error) {
 	stopOrderDirection := investapi.StopOrderDirection_STOP_ORDER_DIRECTION_BUY
-	if positionType.IsLong() {
+	if position.Type.IsLong() {
 		stopOrderDirection = investapi.StopOrderDirection_STOP_ORDER_DIRECTION_SELL
 	}
 	reqStopOrderType := investapi.StopOrderType_STOP_ORDER_TYPE_STOP_LOSS
@@ -406,10 +415,10 @@ func (t *Tinkoff) setStopOrder(
 		reqStopOrderType = investapi.StopOrderType_STOP_ORDER_TYPE_TAKE_PROFIT
 	}
 
-	price := t.addProtectedSpread(positionType, stopPrice)
+	price := t.addProtectedSpread(position.Type, stopPrice)
 	stopOrderRequest := &investapi.PostStopOrderRequest{
 		Figi:           t.instrumentFIGI,
-		Quantity:       t.tradedQuantity,
+		Quantity:       position.Quantity,
 		Price:          price,
 		StopPrice:      stopPrice,
 		Direction:      stopOrderDirection,
