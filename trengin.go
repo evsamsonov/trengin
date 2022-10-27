@@ -210,7 +210,7 @@ func (p *Position) Profit() float64 {
 
 // ProfitByPrice возвращает прибыль позиции при указанной цене price
 func (p *Position) ProfitByPrice(price float64) float64 {
-	return (price - p.OpenPrice) * p.Type.Multiplier()
+	return (price - p.OpenPrice) * p.Type.Multiplier() * float64(p.Quantity)
 }
 
 // Duration возвращает длительность закрытой сделки
