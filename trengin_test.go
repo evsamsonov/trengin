@@ -263,6 +263,22 @@ func TestOpenPositionAction_IsValid(t *testing.T) {
 	})
 }
 
+func TestPosition_IsClosed(t *testing.T) {
+	t.Run("not closed", func(t *testing.T) {
+		position := Position{closed: make(chan struct{})}
+		assert.False(t, position.IsClosed())
+	})
+
+	t.Run("closed", func(t *testing.T) {
+		position := Position{
+			closed:     make(chan struct{}),
+			closedOnce: &sync.Once{},
+		}
+		assert.NoError(t, position.Close(time.Now(), 123))
+		assert.True(t, position.IsClosed())
+	})
+}
+
 func TestEngine_doOpenPosition(t *testing.T) {
 	broker := &MockBroker{}
 	position := Position{}

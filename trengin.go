@@ -194,6 +194,15 @@ func (p *Position) Closed() <-chan struct{} {
 	return p.closed
 }
 
+func (p *Position) IsClosed() bool {
+	select {
+	case <-p.Closed():
+		return true
+	default:
+	}
+	return false
+}
+
 func (p *Position) IsLong() bool {
 	return p.Type == Long
 }
