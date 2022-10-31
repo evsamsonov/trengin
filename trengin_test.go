@@ -9,9 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
-
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestPositionType_Multiplier(t *testing.T) {
@@ -64,6 +65,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			name: "long",
 			action: OpenPositionAction{
 				Type:             Long,
+				Quantity:         1,
 				StopLossIndent:   1,
 				TakeProfitIndent: 2,
 				result:           make(chan OpenPositionActionResult),
@@ -71,7 +73,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			openPrice: 10,
 			openTime:  time.Unix(1, 0),
 			want: &Position{
-				ID:         1,
+				ID:         PositionID(uuid.New()),
 				Type:       Long,
 				OpenTime:   time.Unix(1, 0),
 				OpenPrice:  10,
@@ -85,6 +87,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			name: "short",
 			action: OpenPositionAction{
 				Type:             Short,
+				Quantity:         1,
 				StopLossIndent:   1,
 				TakeProfitIndent: 2,
 				result:           make(chan OpenPositionActionResult),
@@ -92,7 +95,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			openPrice: 10,
 			openTime:  time.Unix(1, 0),
 			want: &Position{
-				ID:         1,
+				ID:         PositionID(uuid.New()),
 				Type:       Short,
 				OpenTime:   time.Unix(1, 0),
 				OpenPrice:  10,
@@ -174,13 +177,18 @@ func TestPosition_Profit(t *testing.T) {
 	}{
 		{
 			name:     "long",
-			position: Position{Type: Long, OpenPrice: 10, ClosePrice: 15},
+			position: Position{Type: Long, Quantity: 1, OpenPrice: 10, ClosePrice: 15},
 			want:     5,
 		},
 		{
 			name:     "short",
-			position: Position{Type: Short, OpenPrice: 10, ClosePrice: 15},
+			position: Position{Type: Short, Quantity: 1, OpenPrice: 10, ClosePrice: 15},
 			want:     -5,
+		},
+		{
+			name:     "short, quantity=5",
+			position: Position{Type: Short, Quantity: 5, OpenPrice: 10, ClosePrice: 15},
+			want:     -25,
 		},
 	}
 	for _, tt := range tests {
@@ -199,13 +207,13 @@ func TestPosition_ProfitByPrice(t *testing.T) {
 	}{
 		{
 			name:     "long",
-			position: Position{Type: Long, OpenPrice: 10},
+			position: Position{Type: Long, Quantity: 1, OpenPrice: 10},
 			price:    25,
 			want:     15,
 		},
 		{
 			name:     "short",
-			position: Position{Type: Short, OpenPrice: 10},
+			position: Position{Type: Short, Quantity: 1, OpenPrice: 10},
 			price:    5,
 			want:     5,
 		},
@@ -257,8 +265,24 @@ func TestOpenPositionAction_IsValid(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		action := OpenPositionAction{Type: Long}
+		action := OpenPositionAction{Type: Long, Quantity: 1}
 		assert.True(t, action.IsValid())
+	})
+}
+
+func TestPosition_IsClosed(t *testing.T) {
+	t.Run("not closed", func(t *testing.T) {
+		position := Position{closed: make(chan struct{})}
+		assert.False(t, position.IsClosed())
+	})
+
+	t.Run("closed", func(t *testing.T) {
+		position := Position{
+			closed:     make(chan struct{}),
+			closedOnce: &sync.Once{},
+		}
+		assert.NoError(t, position.Close(time.Now(), 123))
+		assert.True(t, position.IsClosed())
 	})
 }
 
@@ -281,7 +305,6 @@ func TestEngine_doOpenPosition(t *testing.T) {
 			atomic.AddInt64(&onPositionClosedCalled, 1)
 		},
 		sendResultTimeout: 5 * time.Second,
-		waitGroup:         sync.WaitGroup{},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -289,7 +312,8 @@ func TestEngine_doOpenPosition(t *testing.T) {
 	action := OpenPositionAction{result: resultChan}
 	broker.On("OpenPosition", ctx, action).Return(position, PositionClosed(positionClosed), nil)
 
-	err := engine.doOpenPosition(ctx, action)
+	g := &errgroup.Group{}
+	err := engine.doOpenPosition(ctx, g, action)
 	assert.Nil(t, err)
 	result := <-resultChan
 	assert.Equal(t, position, result.Position)
@@ -312,7 +336,7 @@ waitCalledLoop:
 		}
 	}
 	cancel()
-	engine.waitGroup.Wait()
+	_ = g.Wait()
 }
 
 func TestEngine_doClosePosition(t *testing.T) {
@@ -324,6 +348,7 @@ func TestEngine_doClosePosition(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	resultChan := make(chan ClosePositionActionResult, 1)
 	action := ClosePositionAction{result: resultChan}
 	broker.On("ClosePosition", ctx, action).Return(position, nil)
@@ -333,9 +358,6 @@ func TestEngine_doClosePosition(t *testing.T) {
 	result := <-resultChan
 	assert.Equal(t, position, result.Position)
 	assert.Nil(t, result.error)
-
-	cancel()
-	engine.waitGroup.Wait()
 }
 
 func TestEngine_doChangeConditionalOrder(t *testing.T) {
@@ -353,6 +375,7 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	resultChan := make(chan ChangeConditionalOrderActionResult, 1)
 	action := ChangeConditionalOrderAction{result: resultChan}
 	broker.On("ChangeConditionalOrder", ctx, action).Return(position, nil)
@@ -363,21 +386,23 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 	assert.Equal(t, position, result.Position)
 	assert.Nil(t, result.error)
 	assert.True(t, onChangeConditionalOrderCalled)
-
-	cancel()
-	engine.waitGroup.Wait()
 }
 
 func TestEngine_Run(t *testing.T) {
 	t.Run("context canceled", func(t *testing.T) {
 		strategy := &MockStrategy{}
+		broker := &MockBroker{}
 		ctx, cancel := context.WithCancel(context.Background())
 
-		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
-		strategy.On("Errors").Return(make(<-chan error))
+		strategy.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
 		strategy.On("Actions").Return(make(Actions))
 
-		engine := Engine{strategy: strategy}
+		broker.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
+
+		engine := Engine{
+			strategy: strategy,
+			broker:   broker,
+		}
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -392,18 +417,19 @@ func TestEngine_Run(t *testing.T) {
 
 	t.Run("error received", func(t *testing.T) {
 		strategy := &MockStrategy{}
+		broker := &MockBroker{}
 		ctx := context.Background()
 
-		errorsChan := make(chan error)
-		var errorsReadChan <-chan error //nolint: gosimple
-		errorsReadChan = errorsChan
-		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
-		strategy.On("Errors").Return(errorsReadChan)
+		strategy.On("Run", mock.Anything).After(1000 * time.Millisecond).Return(nil)
 		strategy.On("Actions").Return(make(Actions))
 
-		engine := Engine{strategy: strategy}
-
 		expectedErr := errors.New("error")
+		broker.On("Run", mock.Anything).After(1000 * time.Millisecond).Return(expectedErr)
+
+		engine := Engine{
+			strategy: strategy,
+			broker:   broker,
+		}
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -413,22 +439,26 @@ func TestEngine_Run(t *testing.T) {
 			assert.ErrorIs(t, err, expectedErr)
 		}()
 
-		errorsChan <- expectedErr
 		wg.Wait()
 	})
 
 	t.Run("unknown action", func(t *testing.T) {
 		strategy := &MockStrategy{}
+		broker := &MockBroker{}
 		ctx := context.Background()
 
 		actionsChan := make(chan interface{})
 		var actionsReadChan Actions //nolint: gosimple
 		actionsReadChan = actionsChan
-		strategy.On("Run", mock.Anything).After(100 * time.Millisecond)
-		strategy.On("Errors").Return(make(<-chan error))
+		strategy.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
 		strategy.On("Actions").Return(actionsReadChan)
 
-		engine := Engine{strategy: strategy}
+		broker.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
+
+		engine := Engine{
+			strategy: strategy,
+			broker:   broker,
+		}
 
 		var wg sync.WaitGroup
 		wg.Add(1)
