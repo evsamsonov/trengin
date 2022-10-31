@@ -591,6 +591,23 @@ func TestTinkoff_processOrderTrades(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
+	stopOrdersServiceClient.On("GetStopOrders", mock.Anything, &investapi.GetStopOrdersRequest{
+		AccountId: "123",
+	}).Return(&investapi.GetStopOrdersResponse{
+		StopOrders: []*investapi.StopOrder{
+			{StopOrderId: "1"},
+			{StopOrderId: "3"},
+		},
+	}, nil)
+	stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
+		AccountId:   "123",
+		StopOrderId: "1",
+	}).Return(&investapi.CancelStopOrderResponse{}, nil)
+	stopOrdersServiceClient.On("CancelStopOrder", mock.Anything, &investapi.CancelStopOrderRequest{
+		AccountId:   "123",
+		StopOrderId: "3",
+	}).Return(&investapi.CancelStopOrderResponse{}, nil)
+
 	tinkoff := &Tinkoff{
 		accountID:       "123",
 		orderClient:     ordersServiceClient,
