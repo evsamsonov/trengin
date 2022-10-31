@@ -46,7 +46,6 @@ func main() {
 		string(tokenBytes),
 		accountID,
 		instrumentFIGI,
-		1,
 		tinkoff.WithLogger(logger),
 	)
 	if err != nil {
