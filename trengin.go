@@ -566,7 +566,11 @@ func (e *Engine) doChangeConditionalOrder(ctx context.Context, action ChangeCond
 	return nil
 }
 
-func (e *Engine) teePositionClosed(done <-chan struct{}, g *errgroup.Group, in PositionClosed) (PositionClosed, PositionClosed) {
+func (e *Engine) teePositionClosed(
+	done <-chan struct{},
+	g *errgroup.Group,
+	in PositionClosed,
+) (PositionClosed, PositionClosed) {
 	out1 := make(chan Position)
 	out2 := make(chan Position)
 

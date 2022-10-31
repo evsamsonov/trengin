@@ -336,7 +336,7 @@ waitCalledLoop:
 		}
 	}
 	cancel()
-	g.Wait()
+	_ = g.Wait()
 }
 
 func TestEngine_doClosePosition(t *testing.T) {
