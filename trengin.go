@@ -214,7 +214,11 @@ func (p *Position) IsShort() bool {
 // Profit возвращает прибыль по закрытой сделке. Для получения незафиксированной прибыли
 // по открытой позиции следует использовать метод ProfitByPrice
 func (p *Position) Profit() float64 {
-	return p.ProfitByPrice(p.ClosePrice)
+	return p.UnitProfit() * float64(p.Quantity)
+}
+
+func (p *Position) UnitProfit() float64 {
+	return (p.ClosePrice - p.OpenPrice) * p.Type.Multiplier()
 }
 
 // ProfitByPrice возвращает прибыль позиции при указанной цене price

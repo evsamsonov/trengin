@@ -65,6 +65,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			name: "long",
 			action: OpenPositionAction{
 				Type:             Long,
+				Quantity:         1,
 				StopLossIndent:   1,
 				TakeProfitIndent: 2,
 				result:           make(chan OpenPositionActionResult),
@@ -86,6 +87,7 @@ func TestPositionType_NewPosition(t *testing.T) {
 			name: "short",
 			action: OpenPositionAction{
 				Type:             Short,
+				Quantity:         1,
 				StopLossIndent:   1,
 				TakeProfitIndent: 2,
 				result:           make(chan OpenPositionActionResult),
@@ -175,13 +177,18 @@ func TestPosition_Profit(t *testing.T) {
 	}{
 		{
 			name:     "long",
-			position: Position{Type: Long, OpenPrice: 10, ClosePrice: 15},
+			position: Position{Type: Long, Quantity: 1, OpenPrice: 10, ClosePrice: 15},
 			want:     5,
 		},
 		{
 			name:     "short",
-			position: Position{Type: Short, OpenPrice: 10, ClosePrice: 15},
+			position: Position{Type: Short, Quantity: 1, OpenPrice: 10, ClosePrice: 15},
 			want:     -5,
+		},
+		{
+			name:     "short, quantity=5",
+			position: Position{Type: Short, Quantity: 5, OpenPrice: 10, ClosePrice: 15},
+			want:     -25,
 		},
 	}
 	for _, tt := range tests {
@@ -200,13 +207,13 @@ func TestPosition_ProfitByPrice(t *testing.T) {
 	}{
 		{
 			name:     "long",
-			position: Position{Type: Long, OpenPrice: 10},
+			position: Position{Type: Long, Quantity: 1, OpenPrice: 10},
 			price:    25,
 			want:     15,
 		},
 		{
 			name:     "short",
-			position: Position{Type: Short, OpenPrice: 10},
+			position: Position{Type: Short, Quantity: 1, OpenPrice: 10},
 			price:    5,
 			want:     5,
 		},
@@ -258,7 +265,7 @@ func TestOpenPositionAction_IsValid(t *testing.T) {
 	})
 
 	t.Run("valid", func(t *testing.T) {
-		action := OpenPositionAction{Type: Long}
+		action := OpenPositionAction{Type: Long, Quantity: 1}
 		assert.True(t, action.IsValid())
 	})
 }
@@ -413,11 +420,11 @@ func TestEngine_Run(t *testing.T) {
 		broker := &MockBroker{}
 		ctx := context.Background()
 
-		strategy.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
+		strategy.On("Run", mock.Anything).After(1000 * time.Millisecond).Return(nil)
 		strategy.On("Actions").Return(make(Actions))
 
 		expectedErr := errors.New("error")
-		broker.On("Run", mock.Anything).After(100 * time.Millisecond).Return(expectedErr)
+		broker.On("Run", mock.Anything).After(1000 * time.Millisecond).Return(expectedErr)
 
 		engine := Engine{
 			strategy: strategy,
