@@ -72,6 +72,13 @@ func (p *currentPosition) SetTakeProfitID(takeProfitID string) {
 	p.takeProfitID = takeProfitID
 }
 
+func (p *currentPosition) SetQuantity(quantity int64) {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+
+	p.position.Quantity = quantity
+}
+
 func (p *currentPosition) Close(closePrice float64) error {
 	p.mtx.Lock()
 	defer p.mtx.Unlock()

@@ -310,7 +310,8 @@ func (t *Tinkoff) processOrderTrades(ctx context.Context, orderTrades *investapi
 	}
 
 	if executedQuantity != t.currentPosition.position.Quantity*int64(t.instrument.Lot) {
-		t.logger.Warn("Position was closed partially", zap.Int64("executedQuantity", executedQuantity))
+		t.currentPosition.SetQuantity(executedQuantity / int64(t.instrument.Lot))
+		t.logger.Info("Position partially closed", zap.Int64("executedQuantity", executedQuantity))
 		return nil
 	}
 
