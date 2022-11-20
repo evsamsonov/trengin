@@ -140,6 +140,7 @@ type Position struct {
 	ClosePrice float64
 	StopLoss   float64
 	TakeProfit float64
+	Commission float64
 
 	extraMtx   *sync.RWMutex
 	extra      map[interface{}]interface{}
@@ -211,6 +212,10 @@ func (p *Position) IsShort() bool {
 	return p.Type == Short
 }
 
+func (p *Position) AddCommission(val float64) {
+	p.Commission += val
+}
+
 // Profit возвращает прибыль по закрытой сделке. Для получения незафиксированной прибыли
 // по открытой позиции следует использовать метод ProfitByPrice
 func (p *Position) Profit() float64 {
@@ -218,7 +223,11 @@ func (p *Position) Profit() float64 {
 }
 
 func (p *Position) UnitProfit() float64 {
-	return (p.ClosePrice - p.OpenPrice) * p.Type.Multiplier()
+	return (p.ClosePrice-p.OpenPrice)*p.Type.Multiplier() - p.UnitCommission()
+}
+
+func (p *Position) UnitCommission() float64 {
+	return p.Commission / float64(p.Quantity)
 }
 
 // ProfitByPrice возвращает прибыль позиции при указанной цене price

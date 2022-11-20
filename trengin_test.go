@@ -169,6 +169,15 @@ func TestPosition_IsShort(t *testing.T) {
 	assert.True(t, position.IsShort())
 }
 
+func TestPosition_AddCommission(t *testing.T) {
+	position := Position{}
+	position.AddCommission(125)
+	assert.Equal(t, position.Commission, 125.)
+
+	position.AddCommission(150)
+	assert.Equal(t, position.Commission, 275.)
+}
+
 func TestPosition_Profit(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -223,6 +232,11 @@ func TestPosition_ProfitByPrice(t *testing.T) {
 			assert.Equal(t, tt.want, tt.position.ProfitByPrice(tt.price))
 		})
 	}
+}
+
+func TestPosition_UnitCommission(t *testing.T) {
+	position := Position{Commission: 250, Quantity: 2}
+	assert.Equal(t, position.UnitCommission(), 125.)
 }
 
 func TestPosition_Duration(t *testing.T) {
