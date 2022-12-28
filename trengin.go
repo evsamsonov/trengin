@@ -58,18 +58,22 @@ func (t PositionType) Multiplier() float64 {
 	}
 }
 
+// IsLong returns true if position is long
 func (t PositionType) IsLong() bool {
 	return t == Long
 }
 
+// IsShort returns true if position is short
 func (t PositionType) IsShort() bool {
 	return t == Short
 }
 
+// IsValid returns true if position is valid
 func (t PositionType) IsValid() bool {
 	return t == Long || t == Short
 }
 
+// Inverse returns inverted position type
 func (t PositionType) Inverse() PositionType {
 	if t.IsShort() {
 		return Long
@@ -77,6 +81,7 @@ func (t PositionType) Inverse() PositionType {
 	return Short
 }
 
+// NewPositionID creates unique position ID
 func NewPositionID() PositionID {
 	return PositionID(uuid.New())
 }
@@ -111,6 +116,7 @@ type Actions <-chan interface{}
 // Broker описывает интерфейс клиента, исполняющего торговые операции
 // и отслеживающего статус условных заявок по позициям.
 type Broker interface {
+	// Run starts background tasks such as tracking open position.
 	Run(ctx context.Context) error
 
 	// OpenPosition открывает позицию и запускает отслеживание условной заявки
@@ -195,6 +201,7 @@ func (p *Position) Closed() <-chan struct{} {
 	return p.closed
 }
 
+// IsClosed returns true if position is closed
 func (p *Position) IsClosed() bool {
 	select {
 	case <-p.Closed():
@@ -204,14 +211,17 @@ func (p *Position) IsClosed() bool {
 	return false
 }
 
+// IsLong returns true if position is long
 func (p *Position) IsLong() bool {
 	return p.Type == Long
 }
 
+// IsShort returns true if position is short
 func (p *Position) IsShort() bool {
 	return p.Type == Short
 }
 
+// AddCommission add commission to position
 func (p *Position) AddCommission(val float64) {
 	p.Commission += val
 }
@@ -222,10 +232,12 @@ func (p *Position) Profit() float64 {
 	return p.UnitProfit() * float64(p.Quantity)
 }
 
+// UnitProfit returns profit per volume unit
 func (p *Position) UnitProfit() float64 {
 	return (p.ClosePrice-p.OpenPrice)*p.Type.Multiplier() - p.UnitCommission()
 }
 
+// UnitCommission returns commission per volume unit
 func (p *Position) UnitCommission() float64 {
 	return p.Commission / float64(p.Quantity)
 }
