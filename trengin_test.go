@@ -408,9 +408,7 @@ func TestEngine_Run(t *testing.T) {
 		broker := &MockBroker{}
 		ctx, cancel := context.WithCancel(context.Background())
 
-		strategy.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
-		strategy.On("Actions").Return(make(Actions))
-
+		strategy.On("Run", mock.Anything, mock.Anything).After(100 * time.Millisecond).Return(nil)
 		broker.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
 
 		engine := Engine{
@@ -434,11 +432,10 @@ func TestEngine_Run(t *testing.T) {
 		broker := &MockBroker{}
 		ctx := context.Background()
 
-		strategy.On("Run", mock.Anything).After(1000 * time.Millisecond).Return(nil)
-		strategy.On("Actions").Return(make(Actions))
+		strategy.On("Run", mock.Anything, mock.Anything).After(1000 * time.Millisecond).Return(nil)
 
 		expectedErr := errors.New("error")
-		broker.On("Run", mock.Anything).After(1000 * time.Millisecond).Return(expectedErr)
+		broker.On("Run", mock.Anything).After(500 * time.Millisecond).Return(expectedErr)
 
 		engine := Engine{
 			strategy: strategy,
@@ -461,12 +458,10 @@ func TestEngine_Run(t *testing.T) {
 		broker := &MockBroker{}
 		ctx := context.Background()
 
-		actionsChan := make(chan interface{})
-		var actionsReadChan Actions //nolint: gosimple
-		actionsReadChan = actionsChan
-		strategy.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
-		strategy.On("Actions").Return(actionsReadChan)
-
+		strategy.On("Run", mock.Anything, mock.MatchedBy(func(actions Actions) bool {
+			go func() { actions <- "unknown action" }()
+			return true
+		})).After(100 * time.Millisecond).Return(nil)
 		broker.On("Run", mock.Anything).After(100 * time.Millisecond).Return(nil)
 
 		engine := Engine{
@@ -482,7 +477,6 @@ func TestEngine_Run(t *testing.T) {
 			assert.ErrorIs(t, err, ErrUnknownAction)
 		}()
 
-		actionsChan <- "unknown action"
 		wg.Wait()
 	})
 }
