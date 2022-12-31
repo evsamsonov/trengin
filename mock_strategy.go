@@ -13,29 +13,13 @@ type MockStrategy struct {
 	mock.Mock
 }
 
-// Actions provides a mock function with given fields:
-func (_m *MockStrategy) Actions() Actions {
-	ret := _m.Called()
-
-	var r0 Actions
-	if rf, ok := ret.Get(0).(func() Actions); ok {
-		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(Actions)
-		}
-	}
-
-	return r0
-}
-
-// Run provides a mock function with given fields: ctx
-func (_m *MockStrategy) Run(ctx context.Context) error {
-	ret := _m.Called(ctx)
+// Run provides a mock function with given fields: ctx, actions
+func (_m *MockStrategy) Run(ctx context.Context, actions Actions) error {
+	ret := _m.Called(ctx, actions)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context) error); ok {
-		r0 = rf(ctx)
+	if rf, ok := ret.Get(0).(func(context.Context, Actions) error); ok {
+		r0 = rf(ctx, actions)
 	} else {
 		r0 = ret.Error(0)
 	}

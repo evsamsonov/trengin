@@ -98,18 +98,13 @@ func (p PositionID) String() string {
 // то Engine завершит свою работу
 type Strategy interface {
 	// Run запускает стратегию в работу
-	Run(ctx context.Context) error
-
-	// Actions возвращает канал для получения торговых действий. При закрытии
-	// канала Engine завершит работу.
-	Actions() Actions
-	// todo изменить readme
+	Run(ctx context.Context, actions Actions) error
 }
 
 // Actions это канал для передачи торговых действий от Strategy к Broker
 // Может принимать типы OpenPositionAction, ClosePositionAction, ChangeConditionalOrderAction.
 // Неожиданные типы приведут к ошибке и завершению работы Engine
-type Actions <-chan interface{}
+type Actions chan interface{}
 
 //go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Broker --inpackage --case snake
 
@@ -428,6 +423,7 @@ func New(strategy Strategy, broker Broker) *Engine {
 func (e *Engine) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
+	actions := make(Actions)
 
 	g.Go(func() error {
 		defer cancel()
@@ -436,23 +432,23 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	g.Go(func() error {
 		defer cancel()
-		return e.strategy.Run(ctx)
+		return e.strategy.Run(ctx, actions)
 	})
 
 	g.Go(func() error {
 		defer cancel()
-		return e.run(ctx, g)
+		return e.run(ctx, g, actions)
 	})
 
 	return g.Wait()
 }
 
-func (e *Engine) run(ctx context.Context, g *errgroup.Group) error {
+func (e *Engine) run(ctx context.Context, g *errgroup.Group, actions Actions) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case action, ok := <-e.strategy.Actions():
+		case action, ok := <-actions:
 			if !ok {
 				return nil
 			}
