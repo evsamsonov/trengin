@@ -131,8 +131,11 @@ type PositionClosed <-chan Position
 
 // Position описывает торговую позицию. Идентификатор ID является уникальным
 // только в рамках одного запуска
+
+// Position is a trading position.
 type Position struct {
 	ID         PositionID
+	FIGI       string // Financial Instrument Global Identifier
 	Type       PositionType
 	Quantity   int64
 	OpenTime   time.Time
@@ -164,6 +167,7 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 	}
 	return &Position{
 		ID:         NewPositionID(),
+		FIGI:       action.FIGI,
 		Type:       action.Type,
 		Quantity:   action.Quantity,
 		OpenTime:   openTime,
@@ -276,17 +280,13 @@ func (p *Position) RangeExtra(f func(key interface{}, val interface{})) {
 	}
 }
 
-// OpenPositionAction описывает действие по открытию позиции с типом Type и отступами
-// условной заявки StopLossIndent и TakeProfitIndent
+// OpenPositionAction is an action to open a position
 type OpenPositionAction struct {
-	Type     PositionType
-	Quantity int64
-
-	// Отступ стоп-лосса от цены открытия. Если равен 0, то стоп-лосс не должен использоваться
-	StopLossIndent float64
-
-	// Отступ тейк-профита от цены открытия. Если равен 0, то тейк-профит не должен использоваться
-	TakeProfitIndent float64
+	FIGI             string // Financial Instrument Global Identifier
+	Type             PositionType
+	Quantity         int64
+	StopLossIndent   float64 // Stop loss offset from the opening price. If 0 then stop loss is not set
+	TakeProfitIndent float64 //  Take profit offset from the opening price. If 0 then stop loss is not set
 
 	result chan OpenPositionActionResult
 }
@@ -303,17 +303,18 @@ type OpenPositionActionResult struct {
 	error    error
 }
 
-// NewOpenPositionAction создает действие на открытие позиции с типом positionType,
-// отступом стоп-лосса от цены открытия stopLossIndent и отступом тейк-профита
-// от цены открытия takeProfitIndent. Если стоп-лосс или тейк-профит не требуются,
-// то соответствующие значения отступов должны быть равны 0.
+// NewOpenPositionAction creates OpenPositionAction with the given figi, type of position,
+// quantity of lots, stop loss and take profit offsets. If offset is 0
+// then conditional order is not set.
 func NewOpenPositionAction(
+	figi string,
 	positionType PositionType,
 	quantity int64,
-	stopLossIndent,
+	stopLossIndent float64,
 	takeProfitIndent float64,
 ) OpenPositionAction {
 	return OpenPositionAction{
+		FIGI:             figi,
 		Type:             positionType,
 		Quantity:         quantity,
 		StopLossIndent:   stopLossIndent,
