@@ -21,9 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -108,22 +107,23 @@ type Actions chan interface{}
 
 //go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Broker --inpackage --case snake
 
-// Broker описывает интерфейс клиента, исполняющего торговые операции
-// и отслеживающего статус условных заявок по позициям.
+// Broker describes client for execution of trading operations.
 type Broker interface {
-	// Run starts background tasks such as tracking open position.
-	Run(ctx context.Context) error
-
-	// OpenPosition открывает позицию и запускает отслеживание условной заявки
-	// Возвращает открытую позицию, и канал PositionClosed, в который будет отправлена
-	// позиция при закрытии.
+	// OpenPosition opens a position and returns Position and PositionClosed channel,
+	// which will be sent closed position.
 	OpenPosition(ctx context.Context, action OpenPositionAction) (Position, PositionClosed, error)
 
-	// ClosePosition закрывает позицию. Возвращает закрытую позицию
+	// ClosePosition closes a position and returns closed position.
 	ClosePosition(ctx context.Context, action ClosePositionAction) (Position, error)
 
-	// ChangeConditionalOrder изменяет условную заявку по позиции. Возвращает измененную позицию
+	// ChangeConditionalOrder changes conditional orders and returns changed position.
 	ChangeConditionalOrder(ctx context.Context, action ChangeConditionalOrderAction) (Position, error)
+}
+
+// Runner can be implemented Broker client to stars background tasks
+// such as tracking open position.
+type Runner interface {
+	Run(ctx context.Context) error
 }
 
 // PositionClosed канал, в который отправляется позиция при закрытии
@@ -401,6 +401,16 @@ func NewChangeConditionalOrderAction(positionID PositionID, stopLoss, takeProfit
 	}
 }
 
+type Option func(*Engine)
+
+// WithPreventBrokerRun returns Option which sets preventBrokerRun.
+// The default preventBrokerRun is false
+func WithPreventBrokerRun(preventBrokerRun bool) Option {
+	return func(t *Engine) {
+		t.preventBrokerRun = preventBrokerRun
+	}
+}
+
 // Engine описывыет торговый движок. Создавать следует через конструктор New
 type Engine struct {
 	strategy                  Strategy
@@ -409,15 +419,20 @@ type Engine struct {
 	onPositionClosed          func(position Position)
 	onConditionalOrderChanged func(position Position)
 	sendResultTimeout         time.Duration
+	preventBrokerRun          bool
 }
 
 // New создает экземпляр Engine и возвращает указатель на него
-func New(strategy Strategy, broker Broker) *Engine {
-	return &Engine{
+func New(strategy Strategy, broker Broker, opts ...Option) *Engine {
+	engine := &Engine{
 		strategy:          strategy,
 		broker:            broker,
 		sendResultTimeout: 1 * time.Second,
 	}
+	for _, opt := range opts {
+		opt(engine)
+	}
+	return engine
 }
 
 // Run запускает стратегию в работу
@@ -426,10 +441,13 @@ func (e *Engine) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 	actions := make(Actions)
 
-	g.Go(func() error {
-		defer cancel()
-		return e.broker.Run(ctx)
-	})
+	runner, ok := e.broker.(Runner)
+	if ok && !e.preventBrokerRun {
+		g.Go(func() error {
+			defer cancel()
+			return runner.Run(ctx)
+		})
+	}
 
 	g.Go(func() error {
 		defer cancel()
