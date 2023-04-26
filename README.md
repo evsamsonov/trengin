@@ -5,18 +5,19 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/evsamsonov/trengin)](https://goreportcard.com/report/github.com/evsamsonov/trengin)
 [![codecov](https://codecov.io/gh/evsamsonov/trengin/branch/master/graph/badge.svg?token=AC751PKE5Y)](https://codecov.io/gh/evsamsonov/trengin)
 
-A golang library for building an automated trading robot. It provides interfaces for implementation of a trading strategy and execution of trading operations.
+A golang library to build an automated trading robot. It provides interfaces for implementation of a trading strategy and execution of trading operations.
 
 ## Contents 
 
 - [Installing](#installing)
 - [How to use](#how-to-use)
-- [Основные сущности](#основные-сущности)
+- [Main types](#main-types)
 - [How to implement Strategy](#how-to-implement-strategy)
 - [How to implement Broker](#how-to-implement-broker)
-- [Описание сущности Position](#описание-сущности-position)
-- [Дополнительные действия на события](#дополнительные-действия-на-события)
-- [Что дальше](#что-дальше)
+- [Position](#position)
+- [Callbacks on events](#callbacks-on-events)
+- [Broker implementation](#broker-implementation)
+- [What's next?](#whats-next)
 
 ## Installing
 
@@ -32,43 +33,50 @@ Import the package.
 import "github.com/evsamsonov/trengin"
 ```
 
-Create an instance of Engine by passing implementations of Strategy and Broker.
+Create an Engine instance passing implementations of Strategy and Broker and call Run.
 
 ```go
-
+ctx := context.Background()
 tradingEngine := trengin.New(strategy, broker)
-tradingEngine.Run()
+tradingEngine.Run(ctx)
 ```
 
-## Основные сущности
+## Main types
 
-|  Name  | Description | 
-| ------------- | ------------- | 
-| `Engine`  | Trading engine  |
-| `Strategy`  | Trading strategy  |
-| `Broker`  | Модуль исполнения торговых операций  |
-| `Actions`  | Channel for sending trading actions  |
-| `Position`  | Trading position |
+| Name             | Description                             |
+|------------------|-----------------------------------------|
+| `Engine`         | Trading engine                          |
+| `Strategy`       | Trading strategy                        |
+| `Broker`         | Execution of trading operations         |
+| `Actions`        | Channel for sending trading actions     |
+| `Position`       | Trading position                        |
 | `PositionClosed` | Channel for receiving a closed position |
+
 
 ## How to implement a trading strategy
 
-Торговая стратегия описана следующим интерфейсом.
+Trading strategy interface. 
 ```go
 type Strategy interface {
-	Run(ctx context.Context)
-	Actions() Actions
-	Errors() <-chan error
+	Run(ctx context.Context, actions Actions) error
 }
 ```
 
-В методе `Run` реализуется логика торговой стратегии. Здесь может быть анализ текущих данных, открытие позиции, анализ данных по открытой позиции для закрытия или для изменения условной заявки (перестановка стопа в безубыток, трейлинг стоп и т. п.).
+В методе `Run` реализуется логика торговой стратегии. Здесь может быть анализ текущих данных, открытие позиции, 
+анализ данных по открытой позиции для закрытия или для изменения условной заявки (перестановка стопа в безубыток, трейлинг стоп и т. п.).
 
-Метод `Actions` должен вернуть канал через который будет происходить отправка торговых действий. Если закрыть канал, то торговый движок завершит свою работу.
+Method `Run` allow to implement trading strategy logic. It may contain current data analysis, open or close position, track current positions, 
+change conditional order (break-even, trailing stop, etc).
 
-Метод `Errors` должен вернуть канал для отправки критических ошибок в работе стратегии. Если закрыть канал или передать в него ошибку, торговый движок завершит свою работу. 
+Должно останаливаться на ctx.Done 
 
-В канал торговых действий можно отправить экземпляры `OpenPositionAction`, `ClosePositionAction`, `ChangeConditionalOrderAction`. Создаются через конструкторы. При отправке неожидаемых типов торговый движок завершит работу с ошибкой.
+You can send `OpenPositionAction`, `ClosePositionAction`, `ChangeConditionalOrderAction` in `actions` channel. 
+Use constructor to create it. 
+Trading engine crashed if you send unexpected type. 
+
+
+В канал торговых действий можно отправить экземпляры `OpenPositionAction`, `ClosePositionAction`, `ChangeConditionalOrderAction`. 
+Создаются через конструкторы. При отправке неожидаемых типов торговый движок завершит работу с ошибкой.
 
 ### OpenPositionAction
 
@@ -76,11 +84,11 @@ Opening a position.
 
 Constructor: `NewOpenPositionAction`
 
-| Name | Description |
-| ------------- | ------------- |
-| `positionType` | Тип позиции (покупка или продажа) |
-| `stopLossIndent` | Отступ стоп-лосса от цены открытия позиции |
-| `takeProfitIndent` | Отступ тейк-профита от цены открытия позиции  |
+| Name               | Description                                  |
+|--------------------|----------------------------------------------|
+| `positionType`     | Тип позиции (покупка или продажа)            |
+| `stopLossIndent`   | Отступ стоп-лосса от цены открытия позиции   |
+| `takeProfitIndent` | Отступ тейк-профита от цены открытия позиции |
 
 ### ChangeConditionalOrderAction
 
@@ -88,10 +96,10 @@ Changing a condition order.
 
 Constructor: `NewChangeConditionalOrderAction`
 
-| Name | Description |
-| ------------- | ------------- |
-| `positionID` | Идентификатор позиции |
-| `stopLoss` | Новое значения для стоп-лосса (если равно 0, то не изменять) |
+| Name         | Description                                                  |
+|--------------|--------------------------------------------------------------|
+| `positionID` | Идентификатор позиции                                        |
+| `stopLoss`   | Новое значения для стоп-лосса (если равно 0, то не изменять) |
 | `takeProfit` | Новое значения для стоп-лосса (если равно 0, то не изменять) |
 
 ### ClosePositionAction
@@ -100,8 +108,8 @@ Closing a position.
 
 Constructor: `NewClosePositionAction`
 
-| Name | Description |
-| ------------- | ------------- |
+| Name         | Description           |
+|--------------|-----------------------|
 | `positionID` | Идентификатор позиции |
 
 Пример отправки действия и получения результата.
@@ -145,7 +153,7 @@ type Broker interface {
 
 Метод `ChangeConditionalOrder` должен изменить условную заявку по `action`. Возвращать актуальный экземпляр позиции.
 
-## Описание сущности Position
+## Position
 
 Структура `Position` описывает торговую позицию. Содержит уникальный в рамках одного запуска идентификатор `ID` , основные и дополнительные данные о позиции. Может быть в двух состояниях — открытом и закрытом. Некоторые методы возвращают корректное значение только при закрытой позиции. 
 
@@ -181,20 +189,25 @@ type Broker interface {
 | `SetExtra` | Устанавливает значение `val` для ключа `key` |
 | `RangeExtra` | Выполняет переданную функцию для каждого значения в списке Extra |
 
-## Дополнительные действия на события
+## Callbacks on events
 
 Для выполнения дополнительных действий (отправка оповещений, сохранение позиции в БД и т. п.) торговый движок предоставляется методы, с помощью которых можно установить колбэки. Методы не потокобезопасны, вызывать следует до запуска стратегии в работу. 
 
-| Method | Description |
-| ------------- | ------------- |
-| OnPositionOpened  | Устанавливает коллбек на открытие позиции  |
-| OnConditionalOrderChanged  | Устанавливает коллбек на изменение условной заявки  |
-| OnPositionClosed  | Устанавливает коллбек на закрытие позиции |
+| Method                    | Description                                        |
+|---------------------------|----------------------------------------------------|
+| OnPositionOpened          | Устанавливает коллбек на открытие позиции          |
+| OnConditionalOrderChanged | Устанавливает коллбек на изменение условной заявки |
+| OnPositionClosed          | Устанавливает коллбек на закрытие позиции          |
 
-## So, what next?
+## Broker implementation
 
-* Реализовать модули исполнения торговых операций для различных торговых систем.
-* Добавить возможность открывать позиции по разным торговым инструментам.
+| Name                      | Description |
+|---------------------------|-------------|
+| Tinkoff                   | todo        |
+
+## What's next?
+
 * Реализовать инициализацию торгового движка открытыми сделками.
+
 
 
