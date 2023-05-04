@@ -53,9 +53,9 @@ tradingEngine.Run(ctx)
 | `PositionClosed` | Channel for receiving a closed position |
 
 
-## How to implement a trading strategy
+## How to implement Strategy
 
-Trading strategy interface. 
+`Strategy` is defined by the following interface.
 
 ```go
 type Strategy interface {
@@ -68,7 +68,6 @@ It can contain analysis of current data, opening and closing positions, tracking
 It must stop on context Done signal.
 
 You can send `OpenPositionAction`, `ClosePositionAction`, `ChangeConditionalOrderAction` in `actions` channel.
-Trading engine crashed if get unexpected type.
 
 ### OpenPositionAction
 
@@ -90,7 +89,7 @@ Constructor: `NewChangeConditionalOrderAction`
 
 | Name         | Description                                   |
 |--------------|-----------------------------------------------|
-| `positionID` | UUID                                          |
+| `positionID` | Unique ID                                     |
 | `stopLoss`   | New stop loss value (if 0 then leave as is)   |
 | `takeProfit` | New take profit value (if 0 then leave as is) |
 
@@ -102,7 +101,7 @@ Constructor: `NewClosePositionAction`
 
 | Name         | Description |
 |--------------|-------------|
-| `positionID` | UUID        |
+| `positionID` | Unique ID   |
 
 An example of sending an action and receiving the result. 
 
@@ -129,7 +128,7 @@ if err != nil {
 
 ## How to implement Broker
 
-Broker is defined by the following interface
+`Broker` is defined by the following interface. 
 
 ```go
 type Broker interface {
@@ -147,21 +146,19 @@ After sending the closed position to the PositionClosed channel, it should be cl
 
 The `ClosePosition` method should close the position. It should return an instance of the closed position.
 
-The `ChangeConditionalOrder` method should modify the conditional order. It should return the updated position.
+The `ChangeConditionalOrder` method should modify the conditional orders. It should return the updated position.
 
 ## Position
 
 The Position describes a trading position. 
-It contains a unique ID, primary and extra data about the position. 
-It can be in two states - open or closed. 
-Some methods return the correct value only when the position is closed.
+It contains a unique ID, primary and extra data. 
+It can be in two states - open or closed.
 
 The Extra is additional data should only be used for informational purposes and should not be tied 
-to the logic of the trading strategy and execution module, except in cases of local use.
+to the logic of the trading Strategy and Broker implementation, except in cases of local use.
 
-It's created through the `NewPosition` constructor. 
-The position must be created and closed in the Broker implementation. 
-A copy of the position with the ability to set additional data is passed to the Strategy implementation.
+Use `NewPosition` constructor to create Position.  
+The position must be created and closed in the Broker implementation.
 
 **Fields**
 
@@ -204,9 +201,9 @@ A copy of the position with the ability to set additional data is passed to the 
 
 ## Broker implementation
 
-| Name                      | Description |
-|---------------------------|-------------|
-| Tinkoff                   | todo        |
+| Name                                                                      | Description                                                     |
+|---------------------------------------------------------------------------|-----------------------------------------------------------------|
+| [evsamsonov/tinkoff-broker](https://github.com/evsamsonov/tinkoff-broker) | It uses Tinkoff Invest API https://tinkoff.github.io/investAPI/ |
 
 ## What's next?
 
