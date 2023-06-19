@@ -120,7 +120,7 @@ type Broker interface {
 	ChangeConditionalOrder(ctx context.Context, action ChangeConditionalOrderAction) (Position, error)
 }
 
-// Runner can be implemented Broker client to stars background tasks
+// Runner can be implemented Broker client to starts background tasks
 // such as tracking open position.
 type Runner interface {
 	Run(ctx context.Context) error
