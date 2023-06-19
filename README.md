@@ -45,15 +45,15 @@ tradingEngine.Run(context.TODO())
 
 ## Main types
 
-| Name             | Description                                                                                       |
-|------------------|---------------------------------------------------------------------------------------------------|
-| `Engine`         | Trading engine                                                                                    |
-| `Strategy`       | Interface of trading strategy                                                                     |
-| `Broker`         | Interface of interaction with broker                                                              |
-| `Runner`         | Runner can be implemented Broker client to starts background tasks such as tracking open position |
-| `Actions`        | Channel for sending trading actions                                                               |
-| `Position`       | Trading position                                                                                  |
-| `PositionClosed` | Channel for receiving a closed position                                                           |
+| Name             | Description                                                                                |
+|------------------|--------------------------------------------------------------------------------------------|
+| `Engine`         | Trading engine                                                                             |
+| `Strategy`       | Interface of trading strategy                                                              |
+| `Broker`         | Interface of interaction with broker                                                       |
+| `Runner`         | Сan be implemented Broker client to starts background tasks such as tracking open position |
+| `Actions`        | Channel for sending trading actions                                                        |
+| `Position`       | Trading position                                                                           |
+| `PositionClosed` | Channel for receiving a closed position                                                    |
 
 ## How to implement Strategy
 
