@@ -50,7 +50,7 @@ tradingEngine.Run(context.TODO())
 | `Engine`         | Trading engine                                                                             |
 | `Strategy`       | Interface of trading strategy                                                              |
 | `Broker`         | Interface of interaction with broker                                                       |
-| `Runner`         | Сan be implemented Broker client to starts background tasks such as tracking open position |
+| `Runner`         | Сan be implemented in the Broker to starts background tasks such as tracking open position |
 | `Actions`        | Channel for sending trading actions                                                        |
 | `Position`       | Trading position                                                                           |
 | `PositionClosed` | Channel for receiving a closed position                                                    |
@@ -73,11 +73,13 @@ Opening a trading position.
 
 Constructor: `NewOpenPositionAction`
 
-| Arguments          | Description                           |
-|--------------------|---------------------------------------|
-| `positionType`     | Position type (long or short)         |
-| `stopLossOffset`   | Stop loss offset from opening price   |
-| `takeProfitOffset` | Take profit offset from opening price |
+| Arguments          | Description                            |
+|--------------------|----------------------------------------|
+| `figi`             | Financial Instrument Global Identifier |
+| `positionType`     | Position type (long or short)          |
+| `quantity`         | Quantity in lots                       |
+| `stopLossOffset`   | Stop loss offset from opening price    |
+| `takeProfitOffset` | Take profit offset from opening price  |
 
 ### ChangeConditionalOrderAction
 
@@ -114,7 +116,7 @@ sendActionOrDone := func(ctx context.Context, action interface{}) error {
 }
 
 var stopLossIndent, takeProfitIndent float64 // Set your values
-action := trengin.NewOpenPositionAction(trengin.Long, stopLossOffset, takeProfitOffset)
+action := trengin.NewOpenPositionAction("figi", trengin.Long, 1, stopLossOffset, takeProfitOffset)
 if err = s.sendActionOrDone(ctx, action); err != nil {
     // Handle error
 }
@@ -156,8 +158,11 @@ The Position describes a trading position.
 It contains a unique ID (UUID), primary and extra data. 
 It can be in two states &mdash; open or closed.
 
-The `Extra` is additional data should only be used for informational purposes and should not be tied 
-to the trading strategy logic and the Broker implementation, except in cases of local use.
+The `Extra` is additional data should only be used for local and should not be tied 
+to the trading strategy logic and the Broker implementation.
+
+The `Extra` is additional data should only be used for local or information purposes. It should not be tied
+to the trading strategy logic and the Broker implementation. 
 
 Use `NewPosition` constructor to create Position.  
 The position must be created and closed in the Broker implementation.
