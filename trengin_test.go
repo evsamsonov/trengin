@@ -405,7 +405,7 @@ func TestEngine_doChangeConditionalOrder(t *testing.T) {
 func TestEngine_Run(t *testing.T) {
 	t.Run("context canceled", func(t *testing.T) {
 		strategy := &MockStrategy{}
-		broker := &MockBroker{}
+		broker := &MockBrokerRunner{}
 		ctx, cancel := context.WithCancel(context.Background())
 
 		strategy.On("Run", mock.Anything, mock.Anything).After(100 * time.Millisecond).Return(nil)
@@ -429,7 +429,7 @@ func TestEngine_Run(t *testing.T) {
 
 	t.Run("error received", func(t *testing.T) {
 		strategy := &MockStrategy{}
-		broker := &MockBroker{}
+		broker := &MockBrokerRunner{}
 		ctx := context.Background()
 
 		strategy.On("Run", mock.Anything, mock.Anything).After(1000 * time.Millisecond).Return(nil)
@@ -455,7 +455,7 @@ func TestEngine_Run(t *testing.T) {
 
 	t.Run("unknown action", func(t *testing.T) {
 		strategy := &MockStrategy{}
-		broker := &MockBroker{}
+		broker := &MockBrokerRunner{}
 		ctx := context.Background()
 
 		strategy.On("Run", mock.Anything, mock.MatchedBy(func(actions Actions) bool {
