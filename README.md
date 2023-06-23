@@ -135,12 +135,20 @@ type Broker interface {
 ```
 
 The `OpenPosition` method should open a new position, return the opened position and a `PositionClosed` channel.
-It should implement tracking of the closure of the position by a conditional order. 
+It should implement tracking of the closure of the position by a conditional order.
 After sending the closed position to the `PositionClosed`, it should be closed.
 
 The `ClosePosition` method should close the position. It should return the closed position.
 
 The `ChangeConditionalOrder` method should modify the conditional orders. It should return the updated position.
+
+Also, you can implement `Runner` interface in the Broker implementation to starts background tasks such as tracking open position.
+
+```go
+type Runner interface {
+	Run(ctx context.Context) error
+}
+```
 
 ## Position
 
