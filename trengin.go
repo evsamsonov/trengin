@@ -105,6 +105,12 @@ type Strategy interface {
 // Неожиданные типы приведут к ошибке и завершению работы Engine
 type Actions chan interface{}
 
+//go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name BrokerRunner --inpackage --case snake
+type BrokerRunner interface {
+	Broker
+	Runner
+}
+
 //go:generate docker run --rm -v ${PWD}:/app -w /app/ vektra/mockery --name Broker --inpackage --case snake
 
 // Broker describes client for execution of trading operations.
