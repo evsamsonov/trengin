@@ -66,8 +66,8 @@ func TestPositionType_NewPosition(t *testing.T) {
 			action: OpenPositionAction{
 				Type:             Long,
 				Quantity:         1,
-				StopLossIndent:   1,
-				TakeProfitIndent: 2,
+				StopLossOffset:   1,
+				TakeProfitOffset: 2,
 				result:           make(chan OpenPositionActionResult),
 			},
 			openPrice: 10,
@@ -88,8 +88,8 @@ func TestPositionType_NewPosition(t *testing.T) {
 			action: OpenPositionAction{
 				Type:             Short,
 				Quantity:         1,
-				StopLossIndent:   1,
-				TakeProfitIndent: 2,
+				StopLossOffset:   1,
+				TakeProfitOffset: 2,
 				result:           make(chan OpenPositionActionResult),
 			},
 			openPrice: 10,

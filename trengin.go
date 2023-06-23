@@ -120,7 +120,7 @@ type Broker interface {
 	ChangeConditionalOrder(ctx context.Context, action ChangeConditionalOrderAction) (Position, error)
 }
 
-// Runner can be implemented Broker client to stars background tasks
+// Runner can be implemented Broker client to starts background tasks
 // such as tracking open position.
 type Runner interface {
 	Run(ctx context.Context) error
@@ -159,11 +159,11 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 		return nil, ErrActionNotValid
 	}
 	var stopLoss, takeProfit float64
-	if action.StopLossIndent != 0 {
-		stopLoss = openPrice - action.StopLossIndent*action.Type.Multiplier()
+	if action.StopLossOffset != 0 {
+		stopLoss = openPrice - action.StopLossOffset*action.Type.Multiplier()
 	}
-	if action.TakeProfitIndent != 0 {
-		takeProfit = openPrice + action.TakeProfitIndent*action.Type.Multiplier()
+	if action.TakeProfitOffset != 0 {
+		takeProfit = openPrice + action.TakeProfitOffset*action.Type.Multiplier()
 	}
 	return &Position{
 		ID:         NewPositionID(),
@@ -285,8 +285,8 @@ type OpenPositionAction struct {
 	FIGI             string // Financial Instrument Global Identifier
 	Type             PositionType
 	Quantity         int64
-	StopLossIndent   float64 // Stop loss offset from the opening price. If 0 then stop loss is not set
-	TakeProfitIndent float64 //  Take profit offset from the opening price. If 0 then stop loss is not set
+	StopLossOffset   float64 // Stop loss offset from the opening price. If 0 then stop loss is not set
+	TakeProfitOffset float64 //  Take profit offset from the opening price. If 0 then stop loss is not set
 
 	result chan OpenPositionActionResult
 }
@@ -310,15 +310,15 @@ func NewOpenPositionAction(
 	figi string,
 	positionType PositionType,
 	quantity int64,
-	stopLossIndent float64,
-	takeProfitIndent float64,
+	stopLossOffset float64,
+	takeProfitOffset float64,
 ) OpenPositionAction {
 	return OpenPositionAction{
 		FIGI:             figi,
 		Type:             positionType,
 		Quantity:         quantity,
-		StopLossIndent:   stopLossIndent,
-		TakeProfitIndent: takeProfitIndent,
+		StopLossOffset:   stopLossOffset,
+		TakeProfitOffset: takeProfitOffset,
 		result:           make(chan OpenPositionActionResult),
 	}
 }
