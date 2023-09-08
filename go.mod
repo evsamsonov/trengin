@@ -1,4 +1,4 @@
-module github.com/evsamsonov/trengin
+module github.com/evsamsonov/trengin/v2
 
 go 1.19
 

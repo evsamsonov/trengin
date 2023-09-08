@@ -25,7 +25,7 @@ A golang library to build an automated trading robot. It provides the ability to
 ## Installing
 
 ```shell
-go get github.com/evsamsonov/trengin
+go get github.com/evsamsonov/trengin/v2
 ```
 
 ## How to use
@@ -33,7 +33,7 @@ go get github.com/evsamsonov/trengin
 Import the package.
 
 ```go
-import "github.com/evsamsonov/trengin"
+import "github.com/evsamsonov/trengin/v2"
 ```
 
 Create an Engine instance passing implementations of Strategy and Broker and call Run.
