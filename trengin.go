@@ -288,6 +288,8 @@ func (p *Position) RangeExtra(f func(key interface{}, val interface{})) {
 
 // OpenPositionAction is an action to open a position
 type OpenPositionAction struct {
+	SecurityBoard    string // Trading mode identifier. Example, TQBR
+	SecurityCode     string // Example, SBER
 	FIGI             string // Financial Instrument Global Identifier
 	Type             PositionType
 	Quantity         int64
