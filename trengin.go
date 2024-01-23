@@ -140,17 +140,19 @@ type PositionClosed <-chan Position
 
 // Position is a trading position.
 type Position struct {
-	ID         PositionID
-	FIGI       string // Financial Instrument Global Identifier
-	Type       PositionType
-	Quantity   int64
-	OpenTime   time.Time
-	OpenPrice  float64
-	CloseTime  time.Time
-	ClosePrice float64
-	StopLoss   float64
-	TakeProfit float64
-	Commission float64
+	ID            PositionID
+	SecurityBoard string // Trading mode identifier. Example, TQBR
+	SecurityCode  string // Example, SBER
+	FIGI          string // Financial Instrument Global Identifier
+	Type          PositionType
+	Quantity      int64
+	OpenTime      time.Time
+	OpenPrice     float64
+	CloseTime     time.Time
+	ClosePrice    float64
+	StopLoss      float64
+	TakeProfit    float64
+	Commission    float64
 
 	extraMtx   *sync.RWMutex
 	extra      map[interface{}]interface{}
@@ -172,18 +174,20 @@ func NewPosition(action OpenPositionAction, openTime time.Time, openPrice float6
 		takeProfit = openPrice + action.TakeProfitOffset*action.Type.Multiplier()
 	}
 	return &Position{
-		ID:         NewPositionID(),
-		FIGI:       action.FIGI,
-		Type:       action.Type,
-		Quantity:   action.Quantity,
-		OpenTime:   openTime,
-		OpenPrice:  openPrice,
-		StopLoss:   stopLoss,
-		TakeProfit: takeProfit,
-		extraMtx:   &sync.RWMutex{},
-		extra:      make(map[interface{}]interface{}),
-		closed:     make(chan struct{}),
-		closedOnce: &sync.Once{},
+		ID:            NewPositionID(),
+		SecurityBoard: action.SecurityBoard,
+		SecurityCode:  action.SecurityCode,
+		FIGI:          action.FIGI,
+		Type:          action.Type,
+		Quantity:      action.Quantity,
+		OpenTime:      openTime,
+		OpenPrice:     openPrice,
+		StopLoss:      stopLoss,
+		TakeProfit:    takeProfit,
+		extraMtx:      &sync.RWMutex{},
+		extra:         make(map[interface{}]interface{}),
+		closed:        make(chan struct{}),
+		closedOnce:    &sync.Once{},
 	}, nil
 }
 
