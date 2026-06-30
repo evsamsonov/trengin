@@ -54,8 +54,6 @@ func main() {
 type demoStrategy struct{}
 
 func (s demoStrategy) Run(ctx context.Context, actions trengin.Actions) error {
-	defer close(actions)
-
 	openAction := trengin.NewOpenPositionAction(figi, trengin.Long, 1, 5, 10)
 	if err := sendAction(ctx, actions, openAction); err != nil {
 		return err
@@ -90,8 +88,11 @@ func (s demoStrategy) Run(ctx context.Context, actions trengin.Actions) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-openResult.Closed:
-		return nil
 	}
+
+	close(actions)
+	<-ctx.Done()
+	return nil
 }
 
 func sendAction(ctx context.Context, actions trengin.Actions, action interface{}) error {
