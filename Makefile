@@ -9,11 +9,11 @@ pre-push: lint test ## Run golang lint and test
 lint: ## Run golang lint using docker
 	go mod download
 	docker run --rm \
-		-v ${GOPATH}/pkg/mod:/go/pkg/mod \
+		-v $(shell go env GOPATH)/pkg/mod:/go/pkg/mod \
  		-v ${PWD}:/app \
  		-w /app \
-	    golangci/golangci-lint:v1.55.2 \
-	    golangci-lint run -v --modules-download-mode=readonly
+	    golangci/golangci-lint:v2.12 \
+	    golangci-lint run --fix -v --modules-download-mode=readonly --timeout=5m
 
 test: ## Run tests
 	GOARCH=amd64 go test ./...
