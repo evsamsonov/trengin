@@ -42,6 +42,16 @@ tradingEngine := trengin.New(strategy, broker)
 tradingEngine.Run(context.TODO())
 ```
 
+### Runnable example
+
+See [examples/simple](examples/simple) for a small working example. It uses an in-memory broker,
+so it does not connect to a real trading account, but it shows how a strategy sends actions,
+waits for results, and reacts to engine callbacks.
+
+```shell
+go run ./examples/simple
+```
+
 ## Main types
 
 | Name             | Description                                                                                  |
