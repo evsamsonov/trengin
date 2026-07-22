@@ -1,0 +1,107 @@
+---
+description: Go backend conventions and patterns
+globs: **/*.go
+---
+
+# Go Backend
+
+## Core Principles
+
+- Write idiomatic, clean Go code following **Effective Go**
+- Prefer simplicity and clarity over cleverness
+- Use standard library and Go idioms whenever possible
+
+## Code Style
+
+- Use small, focused packages; prefer composition over inheritance
+- Write struct literals on multiple lines (one field per line) when there is more than 1 field; single-line literals are allowed for single-field structs and in `_test.go` files
+- In multi-line function signatures, one parameter per line with an explicit type; do not group names under one type (`a, b T`)
+- In multi-line function calls (when a single line would be too long), put each argument on a separate line
+- Write godoc comments for exported package APIs. For internal code, do not comment the obvious; add comments only where behavior is non-obvious (invariants, edge cases, subtle algorithms or trade-offs)
+- Do not add trivial pass-through wrappers without real behavior
+- Do not widen production APIs only to simplify tests: no package-level mutable func vars for stubbing, no dependency structs on every method call, no extra parameters or interfaces used solely for mocks
+- When mocks are needed: consumer-side interface, inject via constructor, generate with `github.com/vektra/mockery` — not pass-through wrapper types
+
+## Architecture
+
+- `context.Context` propagated through all layers; it must always be the first parameter of a function
+- Layered flow: handler → service → repository 
+- Define interfaces on the consumer side (where they are used), not on the producer side. Accept interfaces, return concrete structs.
+- Prefer passing stable service parameters/configuration via constructor dependencies when appropriate, instead of passing them through every method call.
+- Keep `cmd/*/main.go` as a thin composition layer only (flags/config/wiring/startup); business/orchestration logic belongs to internal packages
+- Do not unit-test `cmd/*/main.go`; test services and handlers in `internal/*`
+- Use `errgroup.Group` where concurrent work needs shared cancellation/error propagation
+- Do not nil-check every constructor dependency in `internal/*`; required deps are guaranteed by composition root and tests. Validate in constructors only for public API or when nil is a realistic caller input
+
+## Naming Conventions
+
+- Use `snake_case` for JSON tags
+- Prefer descriptive locals; single-letter names only for method receivers (`func (s *T)`), not for values that live across several statements
+- Prefix constants of a specific type with the type name
+
+## Error Handling
+
+- Check errors with `errors.Is()` / `errors.As()`
+- Always wrap errors: `fmt.Errorf("tag: %w", err)`. Default to a short action tag (`get user`, `parse config`); extend only when the action alone cannot locate the failure (e.g. `fmt.Errorf("process item %d: %w", i, err)`)
+- Handle each error once: return wrapped errors or log at the boundary layer — never ignore; do not log and return the same error unless the log adds context that should not go into the error text (fields, IDs, request metadata)
+- Reuse `err` for sequential error checks in the same function; do not invent alternative names (`err2`, `cerr`, `fooErr`) when the previous `err` is already checked and no longer needed
+
+## Logging
+
+- Use only `go.uber.org/zap`, structured logging
+- Pass logger via constructors
+- Start log message with an uppercase letter
+- For error logs where it fits, prefer message format `Failed to ...` (e.g. `Failed to get source leverage request items`)
+- If the same fields are logged more than once in a function or scope, bind them once with `logger.With(...)` and reuse that logger
+
+## Database
+
+- Use `sqlx` for database access
+- Name repository layer structs as `Storage`
+- Prefer `NamedExec` / `NamedQuery` when a query has many parameters; for one or two parameters, plain `Exec` / `Query` is fine
+- Use transactions for atomic operations
+- Pass `context.Context` to all DB calls
+
+## Testing
+
+- Use `github.com/stretchr/testify/assert` for assertions
+- Prefer `assert` over `require` when checks are independent and it is useful to see multiple failures in one run; use `require` only for hard preconditions
+- Use `github.com/vektra/mockery` for mocks
+- Use table-driven tests for multiple cases; a single-case test does not need a table
+- Test primarily business logic and critical behavior paths; avoid tests for every integration/wiring detail
+- Do not write tests "for everything"; skip low-value coverage-only tests
+- Do not add production abstractions/seams only to make tests easier
+- If tests require significant production-code complexity, prefer reducing test scope to critical scenarios
+
+## Imports
+
+- Group imports into three sections separated by a blank line:
+  1. Standard library packages
+  2. Third-party packages
+  3. Internal project packages (starting with the module name)
+- Use `goimports` to automatically format imports
+- Package aliases must be lowercase only (Go style); do not use `camelCase` or `snake_case` aliases
+
+### Vertical spacing
+
+- One blank line between logical steps; avoid consecutive blank lines without a reason
+- Blank line after `if err != nil { return ... }` before the next independent step
+- Separate top-level groups in a file with a blank line (same idea as **Imports**)
+
+### Function order
+
+- Prefer exported functions and types above unexported helpers; keep private helpers toward the bottom of the file
+- Prefer callees below callers: place a function under the functions that use it
+
+## HTTP Handlers
+
+- Use Go 1.22+ routing patterns
+- HTTP handlers should only be responsible for parsing requests, calling the service layer, and formatting responses. No business logic in handlers.
+
+## Preferred Libraries
+
+- Prefer well-maintained, community-standard libraries
+
+## Configuration
+
+- Validate and parse configuration inside `Config`
