@@ -1,4 +1,4 @@
-# trengin 
+# trengin
 
 _**TR**ading **ENGIN**e_
 
@@ -7,10 +7,9 @@ _**TR**ading **ENGIN**e_
 [![Go Report Card](https://goreportcard.com/badge/github.com/evsamsonov/trengin)](https://goreportcard.com/report/github.com/evsamsonov/trengin)
 [![codecov](https://codecov.io/gh/evsamsonov/trengin/branch/master/graph/badge.svg?token=AC751PKE5Y)](https://codecov.io/gh/evsamsonov/trengin)
 
-A golang library to build an automated trading robot. It provides the ability to separate trading strategy logic and interaction with broker.
+A Go library for building automated trading robots. It separates trading strategy logic from broker interaction.
 
-
-## Contents 
+## Contents
 
 - [Installing](#installing)
 - [How to use](#how-to-use)
@@ -36,7 +35,7 @@ Import the package.
 import "github.com/evsamsonov/trengin/v2"
 ```
 
-Create an Engine instance passing implementations of Strategy and Broker and call Run.
+Create an `Engine` instance by passing implementations of `Strategy` and `Broker`, then call `Run`.
 
 ```go
 tradingEngine := trengin.New(strategy, broker)
@@ -55,15 +54,17 @@ go run ./examples/simple
 
 ## Main types
 
-| Name             | Description                                                                                |
-|------------------|--------------------------------------------------------------------------------------------|
-| `Engine`         | Trading engine                                                                             |
-| `Strategy`       | Interface of trading strategy                                                              |
-| `Broker`         | Interface of interaction with broker                                                       |
-| `Runner`         | Сan be implemented in the Broker to starts background tasks such as tracking open position |
-| `Actions`        | Channel for sending trading actions                                                        |
-| `Position`       | Trading position                                                                           |
-| `PositionClosed` | Channel for receiving a closed position                                                    |
+| Name             | Description                                                                                  |
+|------------------|----------------------------------------------------------------------------------------------|
+| `Engine`         | Trading engine                                                                               |
+| `Strategy`       | Trading strategy interface                                                                   |
+| `Broker`         | Broker interaction interface                                                                 |
+| `BrokerRunner`   | Combines `Broker` and `Runner`                                                               |
+| `Runner`         | Can be implemented by a `Broker` to start background tasks such as tracking open positions   |
+| `Actions`        | Channel for sending trading actions                                                          |
+| `Position`       | Trading position                                                                             |
+| `PositionClosed` | Channel for receiving a closed position                                                      |
+| `PositionID`     | Unique position identifier (UUID)                                                            |
 
 ## How to implement Strategy
 
@@ -73,67 +74,72 @@ type Strategy interface {
 }
 ```
 
-The `Run` method should implement trading strategy logic. 
-It can contain analysis of current data, opening and closing positions, tracking current positions, modifying conditional orders.
-You can send `OpenPositionAction`, `ClosePositionAction`, `ChangeConditionalOrderAction` in `actions` channel.
+The `Run` method should implement the trading strategy logic.
+It can analyze current data, open and close positions, track open positions, and modify conditional orders.
+You can send `OpenPositionAction`, `ClosePositionAction`, and `ChangeConditionalOrderAction` on the `actions` channel.
+Closing the `actions` channel stops the engine.
 
 ### OpenPositionAction
 
-Opening a trading position.
+Opens a trading position.
 
 Constructor: `NewOpenPositionAction`
 
-| Arguments          | Description                            |
-|--------------------|----------------------------------------|
-| `figi`             | Financial Instrument Global Identifier |
-| `positionType`     | Position type (long or short)          |
-| `quantity`         | Quantity in lots                       |
-| `stopLossOffset`   | Stop loss offset from opening price    |
-| `takeProfitOffset` | Take profit offset from opening price  |
+| Argument           | Description                                                                 |
+|--------------------|-----------------------------------------------------------------------------|
+| `figi`             | Financial Instrument Global Identifier                                      |
+| `positionType`     | Position type (`Long` or `Short`)                                           |
+| `quantity`         | Quantity in lots                                                            |
+| `stopLossOffset`   | Stop loss offset from the opening price (0 means no stop loss)              |
+| `takeProfitOffset` | Take profit offset from the opening price (0 means no take profit)          |
+
+The action struct also has optional fields `SecurityBoard` and `SecurityCode` that can be set when needed.
 
 ### ChangeConditionalOrderAction
 
-Changing a condition order.
+Changes a conditional order.
 
 Constructor: `NewChangeConditionalOrderAction`
 
-| Name         | Description                                   |
+| Argument     | Description                                   |
 |--------------|-----------------------------------------------|
-| `positionID` | Unique ID (UUID)                              |
-| `stopLoss`   | New stop loss value (if 0 then leave as is)   |
-| `takeProfit` | New take profit value (if 0 then leave as is) |
+| `positionID` | Unique position ID (`PositionID`)             |
+| `stopLoss`   | New stop loss value (0 leaves the current value unchanged) |
+| `takeProfit` | New take profit value (0 leaves the current value unchanged) |
 
 ### ClosePositionAction
 
-Closing a position.
+Closes a position.
 
 Constructor: `NewClosePositionAction`
 
-| Name         | Description       |
-|--------------|-------------------|
-| `positionID` | Unique ID  (UUID) |
+| Argument     | Description                       |
+|--------------|-----------------------------------|
+| `positionID` | Unique position ID (`PositionID`) |
 
-An example of sending an action and receiving the result. 
+Example of sending an action and receiving the result.
 
 ```go
-sendActionOrDone := func(ctx context.Context, action interface{}) error {
-    select {
-    case <-ctx.Done():
-    	return ctx.Err()
-    case s.actions <- action:
-    }
-    return nil
+sendActionOrDone := func(ctx context.Context, actions trengin.Actions, action interface{}) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case actions <- action:
+	}
+	return nil
 }
 
-var stopLossIndent, takeProfitIndent float64 // Set your values
+var stopLossOffset, takeProfitOffset float64 // Set your values
 action := trengin.NewOpenPositionAction("figi", trengin.Long, 1, stopLossOffset, takeProfitOffset)
-if err = s.sendActionOrDone(ctx, action); err != nil {
-    // Handle error
+if err := sendActionOrDone(ctx, actions, action); err != nil {
+	// Handle error
 }
 result, err := action.Result(ctx)
 if err != nil {
-    // Handle error
+	// Handle error
 }
+// result.Position contains the opened position
+// result.Closed is a channel that receives the position when it is closed
 ```
 
 ## How to implement Broker
@@ -146,15 +152,15 @@ type Broker interface {
 }
 ```
 
-The `OpenPosition` method should open a new position, return the opened position and a `PositionClosed` channel.
-It should implement tracking of the closure of the position by a conditional order.
-After sending the closed position to the `PositionClosed`, it should be closed.
+The `OpenPosition` method should open a new position, return the opened position, and provide a `PositionClosed` channel.
+It should track when the position is closed by a conditional order.
+After sending the closed position to the `PositionClosed` channel, the channel should be closed.
 
-The `ClosePosition` method should close the position. It should return the closed position.
+The `ClosePosition` method should close the position and return the closed position.
 
-The `ChangeConditionalOrder` method should modify the conditional orders. It should return the updated position.
+The `ChangeConditionalOrder` method should modify conditional orders and return the updated position.
 
-Also, you can implement `Runner` interface in the Broker implementation to starts background tasks such as tracking open position.
+You can also implement the `Runner` interface in your broker to start background tasks such as tracking open positions.
 
 ```go
 type Runner interface {
@@ -162,78 +168,82 @@ type Runner interface {
 }
 ```
 
+If the broker implements both `Broker` and `Runner`, the engine starts `Runner.Run` automatically.
+Use `trengin.WithPreventBrokerRun(true)` when creating the engine to disable this behavior.
+
 ## Position
 
-The Position describes a trading position. 
-It contains a unique ID (UUID), primary and extra data. 
-It can be in two states &mdash; open or closed.
+`Position` describes a trading position.
+It contains a unique ID (`PositionID`), primary fields, and extra data.
+It can be in one of two states: open or closed.
 
-The `Extra` is additional data should only be used for local and should not be tied 
-to the trading strategy logic and the Broker implementation.
+`Extra` is additional data for local or informational use only.
+It should not be part of the trading strategy logic or the broker implementation contract.
 
-The `Extra` is additional data should only be used for local or information purposes. It should not be tied
-to the trading strategy logic and the Broker implementation. 
+Use the `NewPosition` constructor to create a position in the broker implementation:
 
-Use `NewPosition` constructor to create Position.  
-The position must be created and closed in the Broker implementation.
+```go
+position, err := trengin.NewPosition(action, openTime, openPrice)
+```
+
+The position must be created and closed in the broker implementation.
 
 **Fields**
 
-| Name         | Description                            |
-|--------------|----------------------------------------|
-| `ID`         | Unique identifier (UUID)               |
-| `FIGI`       | Financial Instrument Global Identifier |
-| `Quantity`   | Quantity in lots                       |
-| `Type`       | Type (long or short)                   |
-| `OpenTime`   | Opening time                           |
-| `OpenPrice`  | Opening price                          |
-| `CloseTime`  | Closing time                           |
-| `ClosePrice` | Closing price                          |
-| `StopLoss`   | Current stop loss                      |
-| `TakeProfit` | Current take profit                    |
-| `Commission` | Commission                             |
+| Name             | Description                            |
+|------------------|----------------------------------------|
+| `ID`             | Unique identifier (`PositionID`)       |
+| `SecurityBoard`  | Trading mode identifier (e.g. `TQBR`)  |
+| `SecurityCode`   | Security ticker (e.g. `SBER`)          |
+| `FIGI`           | Financial Instrument Global Identifier |
+| `Quantity`       | Quantity in lots                       |
+| `Type`           | Type (`Long` or `Short`)               |
+| `OpenTime`       | Opening time                           |
+| `OpenPrice`      | Opening price                          |
+| `CloseTime`      | Closing time                           |
+| `ClosePrice`     | Closing price                          |
+| `StopLoss`       | Current stop loss                      |
+| `TakeProfit`     | Current take profit                    |
+| `Commission`     | Commission                             |
 
 **Methods**
 
 | Name             | Description                                                                                  |
 |------------------|----------------------------------------------------------------------------------------------|
-| `Close`          | Close position. If the position is already closed it will return an `ErrAlreadyClosed` error |
-| `Closed`         | Returns a channel that will be closed upon closing the position                              |
-| `IsClosed`       | Position is closed                                                                           |
-| `IsLong`         | Position type is long                                                                        |
-| `IsShort`        | Position type is short                                                                       |
-| `AddCommission`  | Position type is short                                                                       |
-| `Profit`         | Profit by closed position                                                                    |
-| `UnitProfit`     | Profit on a lot by closed position                                                           |
-| `UnitCommission` | Commission on a lot by closed position                                                       |
-| `ProfitByPrice`  | Profit by passing `price`                                                                    |
+| `Close`          | Closes the position. Returns `ErrAlreadyClosed` if the position is already closed           |
+| `Closed`         | Returns a channel that is closed when the position is closed                                 |
+| `IsClosed`       | Returns whether the position is closed                                                       |
+| `IsLong`         | Returns whether the position type is long                                                      |
+| `IsShort`        | Returns whether the position type is short                                                     |
+| `AddCommission`  | Adds commission to the position                                                              |
+| `Profit`         | Profit of a closed position                                                                  |
+| `UnitProfit`     | Profit per lot for a closed position                                                         |
+| `UnitCommission` | Commission per lot                                                                           |
+| `ProfitByPrice`  | Profit at the given price (useful for open positions)                                        |
 | `Duration`       | Position duration from opening time to closing time                                          |
-| `Extra`          | Returns extra data by `key` or `nil` if not set                                              |
+| `Extra`          | Returns extra data by `key`, or `nil` if not set                                               |
 | `SetExtra`       | Sets `val` for `key`                                                                         |
-| `RangeExtra`     | Executes passed function for each extra values                                               |
+| `RangeExtra`     | Executes the passed function for each extra value                                              |
 
 ## Callbacks on events
 
-To perform additional actions (sending notifications, saving position in the database, etc.), 
-the trading engine provides methods to set callbacks. 
-The methods are not thread-safe and should be called before running the strategy.
+To perform additional actions (sending notifications, saving a position to a database, etc.),
+the trading engine provides callback methods.
+These methods are not thread-safe and must be set before running the engine.
 
-| Method                    | Description                                        |
-|---------------------------|----------------------------------------------------|
-| OnPositionOpened          | Sets callback on opening position                  |
-| OnConditionalOrderChanged | Sets callback on changing condition order position |
-| OnPositionClosed          | Sets callback on closing position                  |
+| Method                    | Description                                      |
+|---------------------------|--------------------------------------------------|
+| `OnPositionOpened`        | Sets a callback for position opening             |
+| `OnConditionalOrderChanged` | Sets a callback for conditional order changes  |
+| `OnPositionClosed`        | Sets a callback for position closing             |
 
 ## Broker implementations
 
 | Name                                                                      | Description                                                     |
 |---------------------------------------------------------------------------|-----------------------------------------------------------------|
-| [evsamsonov/tinkoff-broker](https://github.com/evsamsonov/tinkoff-broker) | It uses [Tinkoff Invest API](https://tinkoff.github.io/investAPI/) |
-| [evsamsonov/finam-broker](https://github.com/evsamsonov/finam-broker) | It uses [Finam Trade API](https://finamweb.github.io/trade-api-docs/)  |
+| [evsamsonov/tinkoff-broker](https://github.com/evsamsonov/tinkoff-broker) | Uses [Tinkoff Invest API](https://tinkoff.github.io/investAPI/) |
+| [evsamsonov/finam-broker](https://github.com/evsamsonov/finam-broker)     | Uses [Finam Trade API](https://finamweb.github.io/trade-api-docs/) |
 
 ## What's next?
 
-* Implement the initialization of the trading engine with open positions. 
-
-
-
+* Implement engine initialization with already open positions.
